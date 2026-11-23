@@ -10,11 +10,14 @@ import { createHash, randomBytes, randomInt } from 'node:crypto';
 const sql = neon(process.env.DATABASE_URL);
 const realtime = createRealtime({ secret: process.env.NEON_REALTIME_SECRET, db: 'neondb' });
 
-const LIST_SQL = 'SELECT s.ip, s.name, s.motd, s.host_name, s.players, s.max_players, s.last_seen, (p.ip IS NOT NULL) AS pinned FROM servers s LEFT JOIN pins p ON p.ip = s.ip WHERE s.is_public = true ORDER BY (p.ip IS NOT NULL) DESC, s.players DESC, s.ip LIMIT 60';
+const LIST_SQL = 'SELECT s.ip, s.name, s.motd, s.host_name, s.players, s.max_players, s.mods, s.last_seen, (p.ip IS NOT NULL) AS pinned FROM servers s LEFT JOIN pins p ON p.ip = s.ip WHERE s.is_public = true ORDER BY (p.ip IS NOT NULL) DESC, s.players DESC, s.ip LIMIT 60';
 const NUGGETAUTH = 'https://nuggetauth.vercel.app';
 const ADMINS = (process.env.NUGGETCRAFT_ADMINS || 'nugget').toLowerCase().split(',').map(x => x.trim()).filter(Boolean);
 const MAX_SERVERS = 300;
-const IP_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+// A server address: a number IP like 84.21.9.130 or a custom one like play.nugget (2-5 parts, letters/digits/dashes).
+const IP_RE = /^(?=.{3,40}$)[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?){1,4}$/;
+const MOD_IDS = ['lifesteal', 'shop', 'keepinv', 'nopvp', 'peaceful', 'day', 'kit', 'fastmine', 'notnt'];
+const addr = v => clean(v, 40).toLowerCase();
 
 const hash = t => createHash('sha256').update(String(t)).digest('hex');
 const clean = (v, n) => String(v ?? '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, n);
@@ -46,10 +49,10 @@ export default async function handler(req, res) {
     await sql`DELETE FROM servers WHERE last_seen < now() - interval '90 seconds'`;
 
     if (req.method === 'GET') {
-      const ip = clean(req.query && req.query.ip, 15);
+      const ip = addr(req.query && req.query.ip);
       if (ip) {
         if (!IP_RE.test(ip)) return res.status(400).json({ error: 'That does not look like a server IP' });
-        const rows = await sql`SELECT ip, name, motd, host_name, players, max_players, seed FROM servers WHERE ip = ${ip}`;
+        const rows = await sql`SELECT ip, name, motd, host_name, players, max_players, seed, mods FROM servers WHERE ip = ${ip}`;
         if (!rows.length) return res.status(404).json({ error: 'No server is online at that IP' });
         return res.status(200).json({ server: rows[0] });
       }
@@ -66,7 +69,7 @@ export default async function handler(req, res) {
       const user = await nuggetUser(req);
       if (b.action === 'whoami') return res.status(200).json({ username: user ? user.username : null, admin: isAdmin(user) });
       if (!isAdmin(user)) return res.status(403).json({ error: 'Only admins can pin servers' });
-      const ip = clean(b.ip, 15);
+      const ip = addr(b.ip);
       if (!IP_RE.test(ip)) return res.status(400).json({ error: 'Bad server IP' });
       if (b.action === 'pin') await sql`INSERT INTO pins (ip, pinned_by) VALUES (${ip}, ${user.username}) ON CONFLICT (ip) DO NOTHING`;
       else await sql`DELETE FROM pins WHERE ip = ${ip}`;
@@ -82,10 +85,25 @@ export default async function handler(req, res) {
       const max = int(b.max, 2, 20, 10);
       const seed = int(b.seed, -2147483648, 2147483647, 0);
       const pub = b.public !== false;
+      const mods = (Array.isArray(b.mods) ? b.mods : []).filter(m => MOD_IDS.includes(m)).filter((m, i, a) => a.indexOf(m) === i).join(',');
       // A host who hosted before keeps the same IP (so pins and friends' saved IPs keep working).
       let ip = null, token = null;
-      const oldIp = clean(b.ip, 15), oldToken = clean(b.token, 64);
-      if (IP_RE.test(oldIp) && oldToken) {
+      const oldIp = addr(b.ip), oldToken = clean(b.token, 64), custom = addr(b.custom);
+      if (custom) {
+        // Custom address: free ones get reserved for this host, taken ones only work with the owner's token.
+        if (!IP_RE.test(custom)) return res.status(400).json({ error: 'Custom IP can use letters, numbers, dashes and dots, like play.nugget or 12.34.56.78' });
+        const [taken] = await sql`SELECT token_hash FROM server_ips WHERE ip = ${custom}`;
+        if (taken) {
+          if (!oldToken || taken.token_hash !== hash(oldToken)) return res.status(409).json({ error: `The IP ${custom} is already taken, pick another one` });
+          ip = custom; token = oldToken;
+        } else {
+          token = oldToken || randomBytes(18).toString('hex');
+          const rows = await sql`INSERT INTO server_ips (ip, token_hash) VALUES (${custom}, ${hash(token)}) ON CONFLICT (ip) DO NOTHING RETURNING ip`;
+          if (!rows.length) return res.status(409).json({ error: `The IP ${custom} is already taken, pick another one` });
+          ip = custom;
+        }
+      }
+      if (!ip && IP_RE.test(oldIp) && oldToken) {
         const own = await sql`SELECT ip FROM server_ips WHERE ip = ${oldIp} AND token_hash = ${hash(oldToken)}`;
         if (own.length) { ip = oldIp; token = oldToken; }
       }
@@ -98,14 +116,15 @@ export default async function handler(req, res) {
         }
         if (!ip) return res.status(500).json({ error: 'Could not pick a free IP, try again' });
       }
-      await sql`INSERT INTO servers (ip, name, motd, host_name, players, max_players, seed, is_public, token_hash)
-        VALUES (${ip}, ${name}, ${motd}, ${host}, 1, ${max}, ${seed}, ${pub}, ${hash(token)})
+      await sql`INSERT INTO servers (ip, name, motd, host_name, players, max_players, seed, is_public, token_hash, mods)
+        VALUES (${ip}, ${name}, ${motd}, ${host}, 1, ${max}, ${seed}, ${pub}, ${hash(token)}, ${mods})
         ON CONFLICT (ip) DO UPDATE SET name = EXCLUDED.name, motd = EXCLUDED.motd, host_name = EXCLUDED.host_name, players = 1,
-          max_players = EXCLUDED.max_players, seed = EXCLUDED.seed, is_public = EXCLUDED.is_public, last_seen = now()`;
+          max_players = EXCLUDED.max_players, seed = EXCLUDED.seed, is_public = EXCLUDED.is_public, token_hash = EXCLUDED.token_hash,
+          mods = EXCLUDED.mods, last_seen = now()`;
       return res.status(200).json({ ip, token });
     }
 
-    const ip = clean(b.ip, 15), token = clean(b.token, 64);
+    const ip = addr(b.ip), token = clean(b.token, 64);
     if (!IP_RE.test(ip) || !token) return res.status(400).json({ error: 'Missing server IP or token' });
 
     if (b.action === 'beat') {

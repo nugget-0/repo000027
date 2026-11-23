@@ -98,7 +98,24 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
 .wrow b,.srow b{display:block;font-size:15px;overflow-wrap:anywhere}.wrow small,.srow small{display:block;color:#c3c7d0;font-size:12px;overflow-wrap:anywhere}
 .srow .ip{color:var(--gold);font-family:ui-monospace,monospace}
 .mini{font:9px 'Press Start 2P',monospace;color:#fff;background:#707070;border:2px solid #000;padding:10px;min-height:40px;cursor:pointer;white-space:nowrap}
-.mini.go{background:var(--grass)}.mini.del{background:#7a2b2b}
+.mini.go{background:var(--grass)}
+.maker{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-bottom:6px}.maker .wide{grid-column:1/-1}
+.fl{display:grid;gap:4px;font-size:12px;color:#c3c7d0}
+.fl input,.fl select{font:16px system-ui,sans-serif;padding:10px;min-height:46px;background:#111318;color:#fff;border:3px solid #000;width:100%}
+.mods{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;margin-bottom:8px}
+.mod{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px;align-items:start;background:#2b2d34;border:2px solid #000;padding:8px;cursor:pointer;font-size:13px}
+.mod input{width:18px;height:18px;margin:1px 0 0;grid-row:span 2}.mod b{font-size:13px}.mod small{color:#aab;font-size:11px}
+.mod:has(input:checked){background:#33452f;border-color:#4c8a3c}
+.modtags{display:block;margin-top:2px}.modtags i{font-style:normal;font-size:11px;color:#bfe3b0;background:#2f4529;padding:1px 6px;margin-right:4px;display:inline-block}
+.hudrow{display:flex;gap:14px;align-items:center}
+#coins{font:10px 'Press Start 2P',monospace;color:var(--gold);text-shadow:2px 2px 0 #000}
+.coinbig{color:var(--gold);font-size:11px;margin-left:auto}
+.slist{display:grid;gap:5px;max-height:52vh;overflow:auto;padding-right:4px}
+.sitem{display:grid;grid-template-columns:32px minmax(0,1fr) auto auto;gap:8px;align-items:center;background:#3a3d46;border:2px solid #000;padding:6px 8px;font-size:13px}
+.sitem img{width:32px;height:32px;image-rendering:pixelated}.sitem small{display:block;color:#c3c7d0}
+.shopbody{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+#bShop{right:276px}
+@media(max-width:600px){.maker,.mods,.shopbody{grid-template-columns:minmax(0,1fr)}}.mini.del{background:#7a2b2b}
 .room{display:flex;justify-content:space-between;gap:10px;font:14px system-ui,sans-serif;color:#fff;background:#3a3d46;border:2px solid #000;padding:10px 12px;min-height:44px;cursor:pointer;text-align:left}
 .room span{color:var(--gold);white-space:nowrap}.room:hover{background:#474b57}
 #online{position:fixed;top:10px;left:10px;font:9px 'Press Start 2P',monospace;background:rgba(0,0,0,.45);padding:8px 10px;pointer-events:none;text-shadow:1px 1px 0 #000}
@@ -118,7 +135,7 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
 <div id="toast"></div>
 <div id="online" class="off"></div>
 <div id="chat" class="off"><div id="chatlog"></div><input id="chatIn" class="off" maxlength="120" placeholder="Say something, Enter to send" aria-label="Chat message"></div>
-<div id="hud" class="off"><div id="hearts"></div><div id="hotbar"></div></div>
+<div id="hud" class="off"><div class="hudrow"><div id="hearts"></div><div id="coins" class="off"></div></div><div id="hotbar"></div></div>
 <div id="touch" class="off">
   <div id="joy"><div id="knob"></div></div>
   <div class="tb" id="bJump" data-hold="jump">JUMP</div>
@@ -130,6 +147,7 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
   <div class="tb sm" id="bView">VIEW</div>
   <div class="tb sm" id="bPause">II</div>
   <div class="tb sm off" id="bChat">CHAT</div>
+  <div class="tb sm off" id="bShop">SHOP</div>
 </div>
 <div id="menu" class="screen">
   <div class="card">
@@ -152,9 +170,16 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
       <div id="servers"></div>
       <h3 class="px">Direct connect</h3>
       <div class="mprow ipr"><input id="ipIn" maxlength="15" placeholder="Server IP, like 84.21.9.130" aria-label="Server IP" inputmode="decimal"><button class="btn" id="ipBtn">Connect</button></div>
-      <h3 class="px">Host a server</h3>
-      <div class="mprow"><select id="hostWorld" aria-label="World to host"></select><input id="hostName" maxlength="32" placeholder="Server name" aria-label="Server name"></div>
-      <div class="mprow one"><input id="hostMotd" maxlength="60" placeholder="Message of the day (optional)" aria-label="Message of the day"></div>
+      <h3 class="px">Server maker</h3>
+      <div class="maker">
+        <label class="fl">World<select id="hostWorld"></select></label>
+        <label class="fl">Server name<input id="hostName" maxlength="32" placeholder="Nugget SMP"></label>
+        <label class="fl wide">Message of the day<input id="hostMotd" maxlength="60" placeholder="Optional, shows in the server list"></label>
+        <label class="fl">Max players<select id="hostMax"><option>2</option><option>4</option><option>6</option><option>8</option><option selected>10</option><option>12</option><option>16</option><option>20</option></select></label>
+        <label class="fl">Custom IP<input id="hostIp" maxlength="40" placeholder="Empty = random, or play.nugget" autocapitalize="off" spellcheck="false"></label>
+      </div>
+      <p class="hint">Mods</p>
+      <div id="modList" class="mods"></div>
       <label class="chk"><input type="checkbox" id="hostPublic" checked> Show in the public server list</label>
       <button class="btn primary" id="hostBtn" disabled>Host Server</button>
       <p id="mpMsg" class="hint"></p>
@@ -180,6 +205,13 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
   </div>
 </div></div>
 
+<div id="shop" class="screen off"><div class="card wide">
+  <div class="invhead"><h2 class="px">Shop</h2><span id="shopCoins" class="px coinbig"></span><button class="btn" id="closeShop">Done</button></div>
+  <div class="invbody shopbody">
+    <div><h3 class="px">Sell</h3><p class="hint">Tap an item to sell one, or Sell all.</p><div id="sellList" class="slist"></div></div>
+    <div><h3 class="px">Buy</h3><div id="buyList" class="slist"></div></div>
+  </div>
+</div></div>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -581,14 +613,29 @@ const crackMesh=new THREE.Mesh(new THREE.BoxGeometry(1.003,1.003,1.003),crackMat
 
 /* ================= GAME STATE ================= */
 let state='loading',spawn={x:96.5,y:40,z:96.5},inv=new Array(36).fill(null),sel=0,cursor=null,view=0,clock=0,time=.08;
-const P={pos:new THREE.Vector3(),vel:new THREE.Vector3(),yaw:0,pitch:-.15,onGround:false,hw:.3,h:1.8,health:20,hurtT:0,lastHurt:-99,regenT:0,fallMax:0,crouch:false,sprint:false,dead:false,phase:0,walk:0,swingT:0,once:0,kb:0,autoJump:false};
+const P={pos:new THREE.Vector3(),vel:new THREE.Vector3(),yaw:0,pitch:-.15,onGround:false,hw:.3,h:1.8,health:20,maxHp:20,coins:0,hurtT:0,lastHurt:-99,regenT:0,fallMax:0,crouch:false,sprint:false,dead:false,phase:0,walk:0,swingT:0,once:0,kb:0,autoJump:false};
 const zombies=[],drops=[];
 let keys={},mouseL=false,mouseR=false,locked=false,everLocked=false,lockFailed=false;
 const tState={jump:false,mine:false,place:false,sprint:false,crouch:false};
 let breakT=0,breakKey=-1,breakDelay=0,placeCD=0,atkCD=0,spawnT=0,saveT=0,stations={11:false,13:false};
 const DAY=600; let daylight=1,sunH=1,wasNight=false;
 
-function resetPlayer(){ P.pos.set(spawn.x,spawn.y,spawn.z); P.vel.set(0,0,0); P.health=20; P.dead=false; P.fallMax=spawn.y; P.yaw=0; P.pitch=-.15; }
+function resetPlayer(){ P.pos.set(spawn.x,spawn.y,spawn.z); P.vel.set(0,0,0); P.health=P.maxHp; P.dead=false; P.fallMax=spawn.y; P.yaw=0; P.pitch=-.15; }
+// ----- server mods -----
+const MODS=[
+  {id:'lifesteal',name:'Lifesteal',desc:'Kill a player to steal one of their hearts'},
+  {id:'shop',name:'Sell & buy shop',desc:'Press B to sell items for coins and buy gear'},
+  {id:'keepinv',name:'Keep inventory',desc:'Keep your items when you die'},
+  {id:'nopvp',name:'No PvP',desc:'Players cannot hurt each other'},
+  {id:'peaceful',name:'Peaceful',desc:'No zombies at night'},
+  {id:'day',name:'Always day',desc:'The sun never sets'},
+  {id:'kit',name:'Starter kit',desc:'New players get stone tools and food'},
+  {id:'fastmine',name:'Fast mining',desc:'Break blocks twice as fast'},
+  {id:'notnt',name:'No TNT',desc:'TNT cannot be lit'},
+];
+const MOD_NAME=Object.fromEntries(MODS.map(m=>[m.id,m.name]));
+const parseMods=v=>new Set(String(v||'').split(',').filter(m=>MOD_NAME[m]));
+const modOn=id=>!!(mp.on&&mp.mods&&mp.mods.has(id));
 const heldId=()=>inv[sel]?inv[sel].id:0;
 function countOf(id){ let n=0; for(const s of inv) if(s&&s.id===id) n+=s.n; return n; }
 function addItem(id,n){ const ms=maxStack(id);
@@ -608,10 +655,10 @@ function invChanged(){ renderHotbar(); if(state==='inv') renderInv(); }
 function selectSlot(i){ sel=i; renderHotbar(); breakKey=-1; const s=inv[i]; if(s) toast(itemName(s.id),1200); }
 let toastTO=0;
 function toast(msg,ms=1800){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTO); toastTO=setTimeout(()=>t.classList.remove('show'),ms); }
-function renderHearts(){ let h=''; for(let i=0;i<10;i++){ const v=clamp(P.health-i*2,0,2); h+=`<div class="heart"><i style="width:${v*50}%"></i></div>`; } $('hearts').innerHTML=h; }
+function renderHearts(){ let h=''; const n=Math.ceil(P.maxHp/2); for(let i=0;i<n;i++){ const v=clamp(P.health-i*2,0,2); h+=`<div class="heart"><i style="width:${v*50}%"></i></div>`; } $('hearts').innerHTML=h; $('coins').classList.toggle('off',!modOn('shop')); $('coins').textContent=P.coins+' coins'; }
 function flash(){ const f=$('flash'); f.classList.add('hit'); requestAnimationFrame(()=>requestAnimationFrame(()=>f.classList.remove('hit'))); }
-const KEYS_D=[['WASD','Move'],['Mouse','Look around'],['Space','Jump (works while running)'],['Shift','Sprint'],['C','Sneak'],['Left click / F','Mine, attack (hold)'],['Right click / E','Place block, eat apple, open table'],['1-9 / Wheel','Pick hotbar slot'],['I / Tab','Inventory and crafting'],['Q','Drop item'],['V','First / third person'],['Esc','Pause']];
-const KEYS_T=[['Left stick','Move'],['Drag right side','Look around'],['JUMP','Jump'],['RUN','Sprint on/off'],['SNEAK','Sneak on/off'],['MINE','Hold to mine or attack'],['PLACE','Place, eat, open table'],['BAG','Inventory and crafting'],['VIEW','First / third person']];
+const KEYS_D=[['WASD','Move'],['Mouse','Look around'],['Space','Jump (works while running)'],['Shift','Sprint'],['C','Sneak'],['Left click / F','Mine, attack (hold)'],['Right click / E','Place block, eat apple, open table'],['1-9 / Wheel','Pick hotbar slot'],['I / Tab','Inventory and crafting'],['Q','Drop item'],['V','First / third person'],['T','Chat (multiplayer)'],['B','Shop (servers with the shop mod)'],['Esc','Pause']];
+const KEYS_T=[['Left stick','Move'],['Drag right side','Look around'],['JUMP','Jump'],['RUN','Sprint on/off'],['SNEAK','Sneak on/off'],['MINE','Hold to mine or attack'],['PLACE','Place, eat, open table'],['BAG','Inventory and crafting'],['VIEW','First / third person'],['CHAT / SHOP','On servers that have them']];
 const keysHTML=(isTouch?KEYS_T:KEYS_D).map(([k,v])=>`<kbd>${k}</kbd><span>${v}</span>`).join('')+'<p>Start: punch a tree for logs, craft planks, a crafting table, then a pickaxe.</p>';
 $('keys1').innerHTML=keysHTML; $('keys2').innerHTML=keysHTML;
 
@@ -650,7 +697,8 @@ function setState(s){ state=s;
   $('menu').classList.toggle('off',!(s==='menu'||s==='loading'));
   $('pause').classList.toggle('off',s!=='pause');
   $('death').classList.toggle('off',s!=='dead');
-  $('inv').classList.toggle('off',s!=='inv');
+  $('inv').classList.toggle('off',s!=='inv'); $('shop').classList.toggle('off',s!=='shop');
+  $('bShop').classList.toggle('off',!modOn('shop'));
   $('bChat').classList.toggle('off',!mp.on);
   if(s!=='play'){ if(chatting) closeChat(); mouseL=mouseR=false; keys={}; tState.jump=tState.mine=tState.place=false; document.querySelectorAll('[data-hold]').forEach(b=>b.classList.remove('on')); look.id=null; joyEnd({pointerId:joy.id}); }
 }
@@ -683,6 +731,27 @@ $('mtabs').addEventListener('click',e=>{ const b=e.target.closest('[data-tab]');
   document.querySelectorAll('.mtab').forEach(x=>x.classList.toggle('on',x===b));
   $('tab-sp').classList.toggle('off',b.dataset.tab!=='sp'); $('tab-mp').classList.toggle('off',b.dataset.tab!=='mp'); if(b.dataset.tab==='mp') sbStart(); });
 
+/* ================= SHOP (server mod) ================= */
+const SELL={1:1,2:1,3:2,4:1,5:3,7:1,8:1,9:6,10:10,11:4,13:10,14:3,15:3,16:16,17:40,18:110,19:180,20:540,21:36,22:6,23:2,24:2,25:3,26:20,100:1,101:4,102:12,109:3,110:20,111:60,112:2,113:200,114:5};
+const TOOL_SELL=[2,4,25,40,120];
+for(const kind in TOOLIDS) TOOLIDS[kind].forEach((id,i)=>{ SELL[id]=TOOL_SELL[i]; });
+const BUY=[[109,1,10],[114,1,20],[113,1,400],[101,4,50],[102,1,45],[110,1,75],[111,1,220],[5,8,20],[8,32,24],[14,16,40],[22,16,60],[26,1,60],
+  [TOOLIDS.pick[1],1,30],[TOOLIDS.pick[2],1,140],[TOOLIDS.sword[2],1,120],[TOOLIDS.axe[2],1,120],[TOOLIDS.pick[4],1,650],[TOOLIDS.sword[4],1,600]];
+function openShop(){ if(state!=='play'||!modOn('shop')) return; setState('shop'); renderShop(); if(document.pointerLockElement) document.exitPointerLock(); }
+function closeShop(){ if(state!=='shop') return; setState('play'); setTimeout(requestLock,0); }
+function renderShop(){
+  $('shopCoins').textContent=P.coins+' coins';
+  const have=new Map(); for(const s of inv) if(s&&SELL[s.id]) have.set(s.id,(have.get(s.id)||0)+s.n);
+  $('sellList').innerHTML=have.size?[...have].map(([id,n])=>`<div class="sitem"><img src="${iconURL(id)}" alt=""><span>${esc(itemName(id))} ×${n}<small>${SELL[id]} each</small></span><button class="mini" data-sell="${id}">Sell 1</button><button class="mini go" data-sell="${id}" data-all="1">All</button></div>`).join('')
+    :'<p class="hint">Nothing to sell yet. Go mine some ore!</p>';
+  $('buyList').innerHTML=BUY.map(([id,n,price],i)=>`<div class="sitem"><img src="${iconURL(id)}" alt=""><span>${esc(itemName(id))}${n>1?' ×'+n:''}<small>${price} coins</small></span><span></span><button class="mini go" data-buy="${i}"${P.coins<price?' disabled':''}>Buy</button></div>`).join('');
+}
+$('sellList').addEventListener('click',e=>{ const b=e.target.closest('[data-sell]'); if(!b) return; const id=+b.dataset.sell; const n=b.dataset.all?countOf(id):1;
+  if(!SELL[id]||n<1||countOf(id)<n) return; removeItem(id,n); P.coins+=SELL[id]*n; renderHearts(); renderShop(); toast(`Sold for ${SELL[id]*n} coins`,1000); });
+$('buyList').addEventListener('click',e=>{ const b=e.target.closest('[data-buy]'); if(!b) return; const [id,n,price]=BUY[+b.dataset.buy]||[]; if(!id||P.coins<price) return;
+  P.coins-=price; const left=addItem(id,n); if(left>0) spawnDrop(id,left,P.pos.x,P.pos.y+1,P.pos.z,0,2,0); renderHearts(); renderShop(); toast('Bought '+itemName(id),1000); });
+$('closeShop').addEventListener('click',e=>{ e.preventDefault(); closeShop(); });
+
 /* ================= INPUT ================= */
 addEventListener('keydown',e=>{
   if(e.code==='Tab'||e.code==='Space') e.preventDefault();
@@ -692,9 +761,11 @@ addEventListener('keydown',e=>{
     else if(e.code==='KeyI'||e.code==='Tab') openInv();
     else if(e.code==='KeyV') toggleView();
     else if(e.code==='KeyQ') dropSelected();
+    else if(e.code==='KeyB'&&modOn('shop')) openShop();
     else if((e.code==='KeyT'||e.code==='Enter')&&mp.on){ e.preventDefault(); openChat(); }
     else if(e.code==='Escape') pauseGame();
   } else if(state==='inv'){ if(e.code==='KeyI'||e.code==='Tab'||e.code==='Escape') closeInv(); }
+  else if(state==='shop'){ if(e.code==='KeyB'||e.code==='Escape') closeShop(); }
   else if(state==='pause'&&e.code==='Escape'&&lockFailed) resume();
 });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
@@ -727,6 +798,7 @@ document.querySelectorAll('[data-toggle]').forEach(b=>{ const k=b.dataset.toggle
 $('bInv').addEventListener('pointerdown',e=>{ e.preventDefault(); openInv(); });
 $('bView').addEventListener('pointerdown',e=>{ e.preventDefault(); toggleView(); });
 $('bPause').addEventListener('pointerdown',e=>{ e.preventDefault(); pauseGame(); });
+$('bShop').addEventListener('pointerdown',e=>{ e.preventDefault(); openShop(); });
 $('bChat').addEventListener('pointerdown',e=>{ e.preventDefault(); chatting?closeChat():openChat(); });
 
 /* ================= ENTITIES ================= */
@@ -781,10 +853,15 @@ function hurt(n,kx=0,kz=0){ if(P.dead||P.hurtT>0||n<=0) return;
   P.health-=n; P.hurtT=.5; P.lastHurt=clock;
   if(kx||kz){ P.vel.x+=kx*7; P.vel.z+=kz*7; P.vel.y=Math.max(P.vel.y,5); P.kb=.25; }
   flash(); renderHearts(); if(P.health<=0) die(); }
-function die(){ P.dead=true; P.health=0; renderHearts();
-  for(let i=0;i<36;i++){ const s=inv[i]; if(s){ spawnDrop(s.id,s.n,P.pos.x,P.pos.y+1,P.pos.z,(R()-.5)*5,4,(R()-.5)*5); inv[i]=null; } }
+function die(){ P.dead=true; P.health=0;
+  if(modOn('lifesteal')&&lastHit&&clock-lastHit.t<8&&mp.peers.has(lastHit.id)){
+    const killer=mp.peers.get(lastHit.id); roomPub({t:'ls',to:lastHit.id});
+    if(P.maxHp>4){ P.maxHp-=2; } roomPub({t:'sys',m:`${mp.name} was killed by ${killer.name} and lost a heart`}); sysChat(`${killer.name} stole one of your hearts`); }
+  lastHit=null; renderHearts();
+  if(!modOn('keepinv')) for(let i=0;i<36;i++){ const s=inv[i]; if(s){ spawnDrop(s.id,s.n,P.pos.x,P.pos.y+1,P.pos.z,(R()-.5)*5,4,(R()-.5)*5); inv[i]=null; } }
   invChanged(); setState('dead'); if(document.pointerLockElement) document.exitPointerLock(); save();
-  if(mp.on){ roomPub({t:'sys',m:mp.name+' died'}); sysChat(mp.name+' died'); } }
+  if(mp.on&&!modOn('lifesteal')){ roomPub({t:'sys',m:mp.name+' died'}); sysChat(mp.name+' died'); } }
+let lastHit=null;
 
 /* ================= SAVE ================= */
 // Worlds are saved in localStorage: a list of worlds plus one compact save per world.
@@ -800,7 +877,7 @@ function decEdits(s){ const out=[]; let bin=''; try{ bin=atob(s); }catch(e){ ret
   for(let k=0;k+3<bin.length;k+=4) out.push([bin.charCodeAt(k)|(bin.charCodeAt(k+1)<<8)|(bin.charCodeAt(k+2)<<16),bin.charCodeAt(k+3)]); return out; }
 let saveWarned=false;
 function save(){ const key=saveKey(); if(!key||state==='loading') return;
-  try{ localStorage.setItem(key,JSON.stringify({v:2,seed,e64:encEdits(),inv,sel,pos:[P.pos.x,P.pos.y,P.pos.z],yaw:P.yaw,pitch:P.pitch,time,health:P.dead?20:P.health,spawn,dead:P.dead}));
+  try{ localStorage.setItem(key,JSON.stringify({v:2,seed,e64:encEdits(),inv,sel,pos:[P.pos.x,P.pos.y,P.pos.z],yaw:P.yaw,pitch:P.pitch,time,health:P.dead?P.maxHp:P.health,mh:P.maxHp,co:P.coins,spawn,dead:P.dead}));
     if(worldKey.startsWith('w:')){ const ws=listWorlds(),w=ws.find(x=>x.id===worldKey.slice(2)); if(w){ w.played=Date.now(); storeWorlds(ws); } }
   }catch(e){ if(!saveWarned){ saveWarned=true; toast('Browser storage is full, the world could not be saved',4000); } } }
 function loadSave(){ const key=saveKey(); if(!key) return null; try{ return JSON.parse(localStorage.getItem(key)); }catch(e){ return null; } }
@@ -809,14 +886,14 @@ function applySave(s){
   for(const [i,b] of list) if(Number.isInteger(i)&&i>=0&&i<world.length&&(b===0||BLOCKS[b])){ world[i]=b; edits.set(i,b); }
   if(s.spawn&&Number.isFinite(s.spawn.x)) spawn=s.spawn;
   if(Array.isArray(s.inv)){ inv=new Array(36).fill(null); s.inv.slice(0,36).forEach((v,i)=>{ if(v&&(BLOCKS[v.id]||ITEMS[v.id])&&v.n>0) inv[i]={id:v.id,n:Math.min(v.n,64)}; }); }
-  sel=clamp(s.sel|0,0,8); time=typeof s.time==='number'?s.time:.08; P.health=clamp(s.health||20,1,20);
+  sel=clamp(s.sel|0,0,8); time=typeof s.time==='number'?s.time:.08; P.maxHp=clamp(s.mh|0||20,4,40); P.health=clamp(s.health||P.maxHp,1,P.maxHp); P.coins=Math.max(0,s.co|0);
   if(Array.isArray(s.pos)&&!s.dead&&s.pos.every(Number.isFinite)){ P.pos.set(s.pos[0],s.pos[1],s.pos[2]); P.yaw=s.yaw||0; P.pitch=s.pitch||0; P.fallMax=P.pos.y; }
 }
 function clearWorldEntities(){ while(zombies.length) removeZombie(0); while(drops.length) removeDrop(0);
   for(const e of tnts.values()){ scene.remove(e.m); e.m.material.dispose(); } tnts.clear();
   for(const b of booms){ scene.remove(b.m); b.m.material.dispose(); } booms.length=0; resetBreak(); }
 // Start a world from a seed (with no saved data yet)
-function freshWorld(sd){ clearWorldEntities(); edits.clear(); inv=new Array(36).fill(null); sel=0; time=.08;
+function freshWorld(sd){ P.maxHp=20; P.coins=0; clearWorldEntities(); edits.clear(); inv=new Array(36).fill(null); sel=0; time=.08;
   generate(sd); spawn=findSpawn(); resetPlayer(); }
 function finishLoad(){ queueAll(); renderHotbar(); renderHearts(); }
 function seedFrom(str){ str=String(str||'').trim(); if(!str) return (R()*2147483647)|0; return /^-?\d{1,10}$/.test(str)?(Number(str)|0):hashStr(str); }
@@ -824,7 +901,9 @@ function createWorld(name,seedStr){ const ws=listWorlds();
   const w={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:String(name||'').trim().slice(0,24)||('World '+(ws.length+1)),seed:seedFrom(seedStr),created:Date.now(),played:Date.now()};
   ws.push(w); storeWorlds(ws); return w; }
 function loadWorld(id){ const w=listWorlds().find(x=>x.id===id); if(!w) return false;
-  worldKey='w:'+id; freshWorld(w.seed); const s=loadSave(); if(s) applySave(s); finishLoad(); return true; }
+  worldKey='w:'+id; freshWorld(w.seed); const s=loadSave(); if(s) applySave(s);
+  if(!mp.on){ P.maxHp=20; P.health=Math.min(P.health,20); }
+  finishLoad(); return true; }
 function deleteWorld(id){ storeWorlds(listWorlds().filter(w=>w.id!==id)); try{ localStorage.removeItem(WPRE+id); }catch(e){} if(worldKey==='w:'+id) worldKey='none'; }
 // Older versions kept one save under SKEY; turn it into a world in the list.
 function migrateOldSave(){ try{ const raw=localStorage.getItem(SKEY); if(!raw) return; const s=JSON.parse(raw);
@@ -909,13 +988,18 @@ function onRoom(o){
   if(!p&&(o.t==='p'||o.t==='hi')) p=addPeer(o.id,o.n);
   if(p){ p.last=performance.now(); if(o.ow) p.ow=true; if(o.n&&cleanName(o.n)!==p.name) setPeerName(p,o.n); if(Number.isFinite(o.j)) p.j=o.j; }
   switch(o.t){
-    case 'hi': if(o.first) sysChat(cleanName(o.n)+' joined'); if(isHost()) sendSync(o.id); sendPos(); break;
+    case 'hi': if(mp.owner&&o.first&&mp.peers.size>(mp.max||10)-1){ roomPub({t:'kick',to:o.id,m:`The server is full (${mp.max} players)`}); removePeer(o.id); break; }
+      if(mp.owner) roomPub({t:'cfg',m:[...mp.mods].join(','),max:mp.max});
+      if(o.first) sysChat(cleanName(o.n)+' joined'); if(isHost()) sendSync(o.id); sendPos(); break;
     case 'p': if(p&&[o.x,o.y,o.z].every(Number.isFinite)){ p.tx=o.x; p.ty=o.y; p.tz=o.z; p.yaw=+o.yw||0; p.pitch=+o.pt||0; p.cr=!!o.cr; p.sw=!!o.sw; p.dead=!!o.d; } break;
     case 'bs': if(Array.isArray(o.l)) for(let i=0;i+1<o.l.length;i+=2) applyNetBlock(o.l[i],o.l[i+1]); break;
     case 'sync': if(o.to===mp.id) onSync(o); break;
+    case 'ls': if(o.to===mp.id&&modOn('lifesteal')){ if(P.maxHp<40){ P.maxHp+=2; P.health=Math.min(P.maxHp,P.health+2); } renderHearts(); toast('You stole a heart!',2000); } break;
+    case 'kick': if(o.to===mp.id&&!mp.owner) kicked(typeof o.m==='string'?o.m.slice(0,80):'You were removed from the server'); break;
+    case 'cfg': if(!mp.owner&&p&&p.ow){ mp.mods=parseMods(o.m); if(Number.isFinite(o.max)) mp.max=o.max; renderHearts(); setState(state); } break;
     case 'tnt': if(Number.isInteger(o.i)&&o.i>=0&&o.i<world.length&&world[o.i]===26) ignite(o.i%W,Math.floor(o.i/(W*D)),Math.floor(o.i/W)%D,99,true); break;
     case 'boom': boomAt(+o.x,+o.y,+o.z); break;
-    case 'hit': if(o.to===mp.id) hurt(clamp(Math.round(+o.d)||1,1,10),clamp(+o.kx||0,-1,1),clamp(+o.kz||0,-1,1)); break;
+    case 'hit': if(o.to===mp.id&&!modOn('nopvp')){ lastHit={id:o.id,t:clock}; } if(o.to===mp.id&&!modOn('nopvp')) hurt(clamp(Math.round(+o.d)||1,1,10),clamp(+o.kx||0,-1,1),clamp(+o.kz||0,-1,1)); break;
     case 'chat': if(typeof o.m==='string') addChat(p?p.name:cleanName(o.n),o.m.slice(0,120)); break;
     case 'sys': if(typeof o.m==='string') sysChat(o.m.slice(0,120)); break;
     case 'time': if(!isHost()&&Number.isFinite(o.v)) time=((o.v%1)+1)%1; break;
@@ -963,7 +1047,7 @@ function updatePeers(dt){ const now=performance.now();
     animate(p.m,p.phase,p.walk,p.sw?Math.abs(Math.sin(p.swT*Math.PI)):0,false);
     p.m.g.visible=!p.dead; }
 }
-function hitPeer(p){ const it=ITEMS[heldId()],dx=p.x-P.pos.x,dz=p.z-P.pos.z,d=Math.hypot(dx,dz)||1;
+function hitPeer(p){ if(modOn('nopvp')){ toast('PvP is off on this server',1200); return; } const it=ITEMS[heldId()],dx=p.x-P.pos.x,dz=p.z-P.pos.z,d=Math.hypot(dx,dz)||1;
   roomPub({t:'hit',to:p.id,d:(it&&it.dmg)||1,kx:dx/d,kz:dz/d}); }
 function sendPos(){ roomPub({t:'p',n:mp.name,j:mp.joined,ow:mp.owner?1:0,x:+P.pos.x.toFixed(2),y:+P.pos.y.toFixed(2),z:+P.pos.z.toFixed(2),yw:+P.yaw.toFixed(2),pt:+P.pitch.toFixed(2),cr:P.crouch?1:0,sw:(P.swingT>0||P.once>0)?1:0,d:P.dead?1:0}); }
 function updateOnline(){ $('online').classList.toggle('off',!mp.on); $('online').textContent=`${mp.serverName||''} · ${mp.ip||''} · ${mp.peers.size+1} online`; }
@@ -977,7 +1061,7 @@ $('chatIn').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Ent
 
 // ----- servers with IPs (listed live through Neon Realtime) -----
 const API_BASE=location.protocol==='file:'?'https://nuggetcraft.vercel.app':'';   // same site as the game when hosted
-const IP_RE=/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+const IP_RE=/^(?=.{3,40}$)[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?){1,4}$/;
 async function api(method,body,query,auth){ const h={}; if(body) h['Content-Type']='application/json'; if(auth) h.Authorization='Bearer '+auth;
   const r=await fetch(API_BASE+'/api/servers'+(query||''),{method,headers:h,body:body?JSON.stringify(body):undefined,cache:'no-store',keepalive:method==='POST'&&body&&body.action==='close'});
   let j={}; try{ j=await r.json(); }catch(e){} if(!r.ok) throw new Error(j.error||('Server list error '+r.status)); return j; }
@@ -986,29 +1070,40 @@ function connectServer(info,owner,worldId,token){
   const ip=info.ip,name=cleanName($('mpName').value);
   try{ localStorage.setItem('nuggetcraft-name',name); }catch(e){}
   if(mp.on) leaveRoom(); else save();
-  Object.assign(mp,{on:true,ip,room:'ip-'+ip.replace(/\./g,'-'),name,owner:!!owner,token:token||'',serverName:info.name||ip,joined:Date.now(),synced:!!owner,seed:info.seed|0,beatT:20});
+  Object.assign(mp,{on:true,ip,room:'ip-'+ip.replace(/\./g,'-'),name,owner:!!owner,token:token||'',serverName:info.name||ip,joined:Date.now(),synced:!!owner,seed:info.seed|0,beatT:20,mods:parseMods(info.mods),max:clamp(info.max_players|0||10,2,20)});
   syncParts=null;
   if(owner) loadWorld(worldId);
-  else { worldKey='mp:'+ip; freshWorld(mp.seed); const s=loadSave(); if(s&&(s.seed|0)===mp.seed) applySave(s); finishLoad(); }
+  else { worldKey='mp:'+ip; freshWorld(mp.seed); const s=loadSave(); const had=s&&(s.seed|0)===mp.seed; if(had) applySave(s); finishLoad();
+    if(!had&&modOn('kit')){ addItem(104,1); addItem(107,1); addItem(120,1); addItem(114,8); addItem(8,16); toast('You got the starter kit',2500); } }
   netSub(TOP+'r/'+mp.room);
   roomPub({t:'hi',n:name,j:mp.joined,first:1,ow:mp.owner?1:0});
   for(const ms of [1500,4000,8000]) setTimeout(()=>{ if(mp.on&&mp.ip===ip&&!mp.synced) roomPub({t:'hi',n:name,j:mp.joined}); },ms);
   $('chat').classList.remove('off'); $('chatlog').innerHTML=''; updateOnline();
   sysChat(owner?`Hosting "${mp.serverName}" at IP ${ip}. Friends can join with that IP. Press T to chat.`:`Joined "${mp.serverName}" (${ip}). Press T to chat.`);
-  resume(); }
-function leaveRoom(){ if(!mp.on) return; roomPub({t:'bye',ow:mp.owner?1:0}); save();
+  if(mp.mods.size) sysChat('Mods: '+[...mp.mods].map(m=>MOD_NAME[m]).join(', ')+(modOn('shop')?' · press B for the shop':''));
+  renderHearts(); resume(); }
+function kicked(msg){ sysChat(msg); leaveRoom(); setState('menu'); renderWorlds(); mpMsg(msg); toast(msg,3500); }
+function leaveRoom(){ if(!mp.on) return; if(state==='shop') setState('play'); roomPub({t:'bye',ow:mp.owner?1:0}); save();
   if(mp.owner&&mp.token) api('POST',{action:'close',ip:mp.ip,token:mp.token}).catch(()=>{});
-  mp.on=false; mp.owner=false; mp.token='';
+  mp.on=false; mp.owner=false; mp.token=''; mp.mods=new Set();
   for(const id of [...mp.peers.keys()]) removePeer(id); netQueue=[];
   $('chat').classList.add('off'); updateOnline(); }
 function serverClosed(){ sysChat('The host closed the server'); setTimeout(()=>{ if(!mp.on||mp.owner) return; leaveRoom(); setState('menu'); renderWorlds(); toast('The host closed the server',3000); },1500); }
-$('ipBtn').onclick=async()=>{ const ip=$('ipIn').value.trim(); if(!IP_RE.test(ip)){ mpMsg('Type a server IP like 84.21.9.130'); return; }
-  mpMsg('Connecting to '+ip+'...'); try{ const j=await api('GET',null,'?ip='+encodeURIComponent(ip)); mpMsg(''); connectServer(j.server,false); }catch(e){ mpMsg(e.message); } };
+$('ipBtn').onclick=async()=>{ const ip=$('ipIn').value.trim().toLowerCase(); if(!IP_RE.test(ip)){ mpMsg('Type a server IP like 84.21.9.130 or play.nugget'); return; }
+  mpMsg('Connecting to '+ip+'...'); try{ const j=await api('GET',null,'?ip='+encodeURIComponent(ip)); const sv=j.server; if((sv.players|0)>=(sv.max_players|0)){ mpMsg(`That server is full (${sv.players}/${sv.max_players} players)`); return; } mpMsg(''); connectServer(sv,false); }catch(e){ mpMsg(e.message); } };
+$('modList').innerHTML=MODS.map(m=>`<label class="mod"><input type="checkbox" value="${m.id}"><b>${m.name}</b><small>${m.desc}</small></label>`).join('');
+{ let c={}; try{ c=JSON.parse(localStorage.getItem('nuggetcraft-hostcfg'))||{}; }catch(e){}
+  if(c.name) $('hostName').value=c.name; if(c.motd) $('hostMotd').value=c.motd; if(c.ip) $('hostIp').value=c.ip; if(c.max) $('hostMax').value=String(c.max);
+  if(c.pub===false) $('hostPublic').checked=false; if(Array.isArray(c.mods)) document.querySelectorAll('#modList input').forEach(i=>{ i.checked=c.mods.includes(i.value); }); }
 $('hostBtn').onclick=async()=>{ const wid=$('hostWorld').value, w=listWorlds().find(x=>x.id===wid); if(!w){ mpMsg('Create a world in Singleplayer first, then host it here.'); return; }
+  const custom=$('hostIp').value.trim().toLowerCase(); if(custom&&!IP_RE.test(custom)){ mpMsg('Custom IP can use letters, numbers, dashes and dots, like play.nugget or 12.34.56.78'); return; }
+  const mods=[...document.querySelectorAll('#modList input:checked')].map(i=>i.value), max=clamp(+$('hostMax').value||10,2,20);
+  const sname=$('hostName').value.trim()||(cleanName($('mpName').value)+"'s server");
+  try{ localStorage.setItem('nuggetcraft-hostcfg',JSON.stringify({name:$('hostName').value,motd:$('hostMotd').value,ip:custom,max,pub:$('hostPublic').checked,mods})); }catch(e){}
   const b=$('hostBtn'); b.disabled=true; mpMsg('Starting your server...');
-  try{ const j=await api('POST',{action:'create',ip:w.ip,token:w.token,name:$('hostName').value||(cleanName($('mpName').value)+"'s server"),motd:$('hostMotd').value,host:cleanName($('mpName').value),seed:w.seed,max:10,public:$('hostPublic').checked});
+  try{ const j=await api('POST',{action:'create',ip:w.ip,token:w.token,custom,name:sname,motd:$('hostMotd').value,host:cleanName($('mpName').value),seed:w.seed,max,mods,public:$('hostPublic').checked});
     { const ws=listWorlds(),x=ws.find(v=>v.id===wid); if(x){ x.ip=j.ip; x.token=j.token; storeWorlds(ws); } }
-    mpMsg(''); connectServer({ip:j.ip,name:$('hostName').value||(cleanName($('mpName').value)+"'s server"),seed:w.seed},true,wid,j.token); }
+    mpMsg(''); connectServer({ip:j.ip,name:sname,seed:w.seed,mods:mods.join(','),max_players:max},true,wid,j.token); }
   catch(e){ mpMsg(e.message); } b.disabled=false; };
 $('servers').addEventListener('click',async e=>{ const pb=e.target.closest('[data-pin]');
   if(pb){ if(!isAdminUser||!nauth) return; pb.disabled=true; const on=pb.dataset.on==='1';
@@ -1036,7 +1131,7 @@ function renderServers(){ const now=Date.now();
   const rows=SB.rows.filter(r=>r&&IP_RE.test(r.ip)&&(!r.last_seen||now-new Date(r.last_seen).getTime()<80000));
   $('sbStatus').textContent=SB.status==='offline'?`Couldn't reach the server list (${SB.err||'offline'}). You can still connect by IP when it's back.`
     :SB.status==='live'?`${rows.length} server${rows.length===1?'':'s'} online · updates live`:rows.length?`${rows.length} server${rows.length===1?'':'s'} online`:'Loading the server list...';
-  $('servers').innerHTML=rows.length?rows.map(r=>`<div class="srow${r.pinned?' pin':''}${isAdminUser?' adm':''}"><span><b>${r.pinned?'<span class="tag">PINNED</span>':''}${esc(r.name)}</b><small>${r.motd?esc(r.motd)+' · ':''}hosted by ${esc(r.host_name)} · ${r.players|0}/${r.max_players|0} players</small><small class="ip">${esc(r.ip)}</small></span>${isAdminUser?`<button class="mini" data-pin="${esc(r.ip)}" data-on="${r.pinned?1:0}">${r.pinned?'Unpin':'Pin'}</button>`:''}<button class="mini go" data-ip="${esc(r.ip)}">Join</button></div>`).join('')
+  $('servers').innerHTML=rows.length?rows.map(r=>`<div class="srow${r.pinned?' pin':''}${isAdminUser?' adm':''}"><span><b>${r.pinned?'<span class="tag">PINNED</span>':''}${esc(r.name)}</b><small>${r.motd?esc(r.motd)+' · ':''}hosted by ${esc(r.host_name)} · ${r.players|0}/${r.max_players|0} players${(r.players|0)>=(r.max_players|0)?' · full':''}</small>${r.mods?`<small class="modtags">${[...parseMods(r.mods)].map(m=>`<i>${MOD_NAME[m]}</i>`).join('')}</small>`:''}<small class="ip">${esc(r.ip)}</small></span>${isAdminUser?`<button class="mini" data-pin="${esc(r.ip)}" data-on="${r.pinned?1:0}">${r.pinned?'Unpin':'Pin'}</button>`:''}<button class="mini go" data-ip="${esc(r.ip)}">Join</button></div>`).join('')
     :(SB.status==='offline'?'':'<p class="hint">No public servers right now. Host one below and it shows up here for everyone.</p>'); }
 { let n=''; try{ n=localStorage.getItem('nuggetcraft-name')||''; }catch(e){} $('mpName').value=n||('Player'+((R()*900+100)|0)); }
 // ----- Sign in with Nugget: admins (checked on the server) can pin servers -----
@@ -1069,7 +1164,7 @@ const eye=new THREE.Vector3(),_dir=new THREE.Vector3();
 function lookDir(){ const cp=Math.cos(P.pitch); return _dir.set(-Math.sin(P.yaw)*cp,Math.sin(P.pitch),-Math.cos(P.yaw)*cp); }
 function resetBreak(){ breakT=0; breakKey=-1; crackMesh.visible=false; }
 function update(dt){
-  clock+=dt; time=(time+dt/DAY)%1;
+  clock+=dt; time=modOn('day')?.25:(time+dt/DAY)%1;
   // movement input
   let f=0,s=0;
   if(keys.KeyW||keys.ArrowUp) f+=1; if(keys.KeyS||keys.ArrowDown) f-=1;
@@ -1095,7 +1190,7 @@ function update(dt){
   else { if(!wasGround){ const d=P.fallMax-P.pos.y-3; if(d>.5) hurt(Math.round(d)); } P.fallMax=P.pos.y; }
   // health
   P.hurtT-=dt;
-  if(!P.dead&&P.health<20&&clock-P.lastHurt>5){ P.regenT+=dt; if(P.regenT>2.5){ P.regenT=0; P.health=Math.min(20,P.health+1); renderHearts(); } }
+  if(!P.dead&&P.health<P.maxHp&&clock-P.lastHurt>5){ P.regenT+=dt; if(P.regenT>2.5){ P.regenT=0; P.health=Math.min(P.maxHp,P.health+1); renderHearts(); } }
   // animation values
   const hs=Math.hypot(P.vel.x,P.vel.z);
   if(P.onGround) P.phase+=hs*dt*2.2;
@@ -1124,7 +1219,7 @@ function update(dt){
     else if(target&&breakDelay<=0){
       mining=true;
       const key=idx(target.x,target.y,target.z); if(key!==breakKey){ breakKey=key; breakT=0; }
-      breakT+=dt/breakTime(target.b,heldId());
+      breakT+=dt/breakTime(target.b,heldId())*(modOn('fastmine')?2:1);
       if(breakT>=1){
         const dr=dropFor(target.b,heldId()); setBlock(target.x,target.y,target.z,0);
         if(dr) spawnDrop(dr,1,target.x+.5,target.y+.5,target.z+.5,(R()-.5)*2,3,(R()-.5)*2);
@@ -1149,7 +1244,7 @@ function update(dt){
   fpArm.rotation.set(-1-swing*.8,.15,.1);
   fpArm.position.set(.5-swing*.12,-.58+Math.sin(P.phase*2)*.015*P.walk-swing*.05,-.32-swing*.1);
   // world
-  if(sunH<-.05&&!P.dead){ spawnT-=dt; if(spawnT<=0&&zombies.length<7){ spawnT=4;
+  if(sunH<-.05&&!P.dead&&!modOn('peaceful')){ spawnT-=dt; if(spawnT<=0&&zombies.length<7){ spawnT=4;
     const a=R()*Math.PI*2,dd=16+R()*20; spawnZombie(clamp(Math.floor(P.pos.x+Math.cos(a)*dd),2,W-3),clamp(Math.floor(P.pos.z+Math.sin(a)*dd),2,D-3)); } }
   updateZombies(dt); updateDrops(dt); updateTNT(dt);
   saveT+=dt; if(saveT>15){ saveT=0; save(); }
@@ -1184,11 +1279,11 @@ function updateTNT(dt){
 }
 function usePlace(target){
   const s=inv[sel];
-  if(target&&target.b===26){ ignite(target.x,target.y,target.z,3); P.once=1; toast('TNT lit! Run!',1500); return; }
+  if(target&&target.b===26){ if(modOn('notnt')){ toast('TNT is turned off on this server',1500); return; } ignite(target.x,target.y,target.z,3); P.once=1; toast('TNT lit! Run!',1500); return; }
   if(target&&(target.b===11||target.b===13)&&!P.crouch){ openInv(); return; }
   if(!s) return;
   const it=ITEMS[s.id];
-  if(it&&it.food){ if(P.health<20){ P.health=Math.min(20,P.health+it.food); takeSelected(); renderHearts(); P.once=1; toast('Yum!',900); } return; }
+  if(it&&it.food){ if(P.health<P.maxHp){ P.health=Math.min(P.maxHp,P.health+it.food); takeSelected(); renderHearts(); P.once=1; toast('Yum!',900); } return; }
   if(!BLOCKS[s.id]||!target) return;
   const x=target.x+target.nx,y=target.y+target.ny,z=target.z+target.nz;
   if(!inB(x,y,z)||world[idx(x,y,z)]!==0) return;
