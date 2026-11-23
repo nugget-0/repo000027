@@ -971,7 +971,7 @@ function closeChat(){ chatting=false; const i=$('chatIn'); i.blur(); i.classList
 $('chatIn').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ const m=$('chatIn').value.trim().slice(0,120); if(m){ roomPub({t:'chat',n:mp.name,m}); addChat(mp.name,m); } closeChat(); } else if(e.key==='Escape') closeChat(); });
 
 // ----- servers with IPs (listed live through Neon Realtime) -----
-const API_BASE=/\.vercel\.app$|^localhost$|^127\./.test(location.hostname)?'':'https://nuggetcraft.vercel.app';
+const API_BASE=location.protocol==='file:'?'https://nuggetcraft.vercel.app':'';   // same site as the game when hosted
 const IP_RE=/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 async function api(method,body,query){ const r=await fetch(API_BASE+'/api/servers'+(query||''),{method,headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined,cache:'no-store',keepalive:method==='POST'&&body&&body.action==='close'});
   let j={}; try{ j=await r.json(); }catch(e){} if(!r.ok) throw new Error(j.error||('Server list error '+r.status)); return j; }
