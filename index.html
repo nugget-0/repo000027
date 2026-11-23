@@ -83,7 +83,20 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
 .mprow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-bottom:10px}
 .mprow input,#chatIn{font:16px system-ui,sans-serif;padding:11px 12px;min-height:46px;background:#111318;color:#fff;border:3px solid #000;box-shadow:inset 0 0 0 2px rgba(255,255,255,.12);width:100%}
 .mprow input:focus-visible,#chatIn:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
-#rooms{display:grid;gap:6px;margin-top:10px}
+#rooms,#servers,#worlds{display:grid;gap:6px;margin:10px 0}
+.mtabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0 14px}
+.mtab{font:10px 'Press Start 2P',monospace;color:#fff;background:#2b2d34;border:3px solid #000;padding:12px 8px;min-height:44px;cursor:pointer}
+.mtab.on{background:var(--grass)}
+.tabp{text-align:left;margin-bottom:16px}.tabp h3{margin-top:16px}
+.mprow.one{grid-template-columns:minmax(0,1fr)}.mprow.ipr{grid-template-columns:minmax(0,1fr) auto}.mprow.ipr .btn{width:auto}
+.mprow select{font:16px system-ui,sans-serif;padding:10px;min-height:46px;background:#111318;color:#fff;border:3px solid #000;width:100%}
+.chk{display:flex;gap:8px;align-items:center;margin:4px 0 10px;font-size:14px;color:#d9dde6}.chk input{width:20px;height:20px}
+.wrow,.srow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;background:#3a3d46;border:2px solid #000;padding:8px 8px 8px 12px}
+.srow{grid-template-columns:minmax(0,1fr) auto}
+.wrow b,.srow b{display:block;font-size:15px;overflow-wrap:anywhere}.wrow small,.srow small{display:block;color:#c3c7d0;font-size:12px;overflow-wrap:anywhere}
+.srow .ip{color:var(--gold);font-family:ui-monospace,monospace}
+.mini{font:9px 'Press Start 2P',monospace;color:#fff;background:#707070;border:2px solid #000;padding:10px;min-height:40px;cursor:pointer;white-space:nowrap}
+.mini.go{background:var(--grass)}.mini.del{background:#7a2b2b}
 .room{display:flex;justify-content:space-between;gap:10px;font:14px system-ui,sans-serif;color:#fff;background:#3a3d46;border:2px solid #000;padding:10px 12px;min-height:44px;cursor:pointer;text-align:left}
 .room span{color:var(--gold);white-space:nowrap}.room:hover{background:#474b57}
 #online{position:fixed;top:10px;left:10px;font:9px 'Press Start 2P',monospace;background:rgba(0,0,0,.45);padding:8px 10px;pointer-events:none;text-shadow:1px 1px 0 #000}
@@ -121,15 +134,27 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
     <h1 class="px">NUGGET<br>CRAFT</h1>
     <p class="sub">Punch trees, craft tools, dig for iron and survive the night.</p>
     <p id="loading" class="px small">Generating world...</p>
-    <div class="btns">
-      <button class="btn primary" id="playBtn" disabled>Play</button>
-      <button class="btn" id="newBtn" disabled>New World</button>
+    <div class="mtabs" id="mtabs"><button class="mtab on" data-tab="sp">Singleplayer</button><button class="mtab" data-tab="mp">Multiplayer</button></div>
+    <div id="tab-sp" class="tabp">
+      <div id="worlds"></div>
+      <h3 class="px">New world</h3>
+      <div class="mprow"><input id="newName" maxlength="24" placeholder="World name" aria-label="World name"><input id="newSeed" maxlength="20" placeholder="Seed (optional)" aria-label="Seed"></div>
+      <button class="btn primary" id="createBtn" disabled>Create World</button>
+      <p class="hint">Worlds save in this browser automatically every few seconds.</p>
     </div>
-    <div class="mp">
-      <h3 class="px">Multiplayer</h3>
-      <div class="mprow"><input id="mpName" maxlength="16" placeholder="Your name" aria-label="Your name"><input id="mpRoom" maxlength="24" placeholder="Server name" value="public" aria-label="Server name"></div>
-      <button class="btn primary" id="joinBtn" disabled>Join Server</button>
-      <div id="rooms"><p class="hint">Looking for servers...</p></div>
+    <div id="tab-mp" class="tabp off">
+      <div class="mprow one"><input id="mpName" maxlength="16" placeholder="Your name" aria-label="Your name"></div>
+      <h3 class="px">Public servers</h3>
+      <p id="sbStatus" class="hint">Loading the server list...</p>
+      <div id="servers"></div>
+      <h3 class="px">Direct connect</h3>
+      <div class="mprow ipr"><input id="ipIn" maxlength="15" placeholder="Server IP, like 84.21.9.130" aria-label="Server IP" inputmode="decimal"><button class="btn" id="ipBtn">Connect</button></div>
+      <h3 class="px">Host a server</h3>
+      <div class="mprow"><select id="hostWorld" aria-label="World to host"></select><input id="hostName" maxlength="32" placeholder="Server name" aria-label="Server name"></div>
+      <div class="mprow one"><input id="hostMotd" maxlength="60" placeholder="Message of the day (optional)" aria-label="Message of the day"></div>
+      <label class="chk"><input type="checkbox" id="hostPublic" checked> Show in the public server list</label>
+      <button class="btn primary" id="hostBtn" disabled>Host Server</button>
+      <p id="mpMsg" class="hint"></p>
     </div>
     <div class="keys" id="keys1"></div>
   </div>
@@ -636,13 +661,22 @@ function openInv(){ if(state!=='play') return; computeStations(); cursor=null; s
 function closeInv(){ cursor=null; resume(); }
 function toggleView(){ view=view?0:1; }
 $('resumeBtn').onclick=resume;
-$('quitBtn').onclick=()=>{ save(); if(mp.on) leaveRoom(); setState('menu'); $('playBtn').textContent='Continue'; };
-$('closeInv').onclick=closeInv;
-$('respawnBtn').onclick=()=>{ spawn.y=topY(Math.floor(spawn.x),Math.floor(spawn.z)); resetPlayer(); renderHearts(); resume(); };
-$('playBtn').onclick=()=>{ if(worldKey!=='sp') loadSP(); resume(); if(!inv.some(Boolean)) toast('Hold MINE on a tree to get logs',3500); };
-let newArm=0;
-$('newBtn').onclick=()=>{ const b=$('newBtn'); if(Date.now()-newArm>3000){ newArm=Date.now(); b.textContent='Click again to confirm'; setTimeout(()=>b.textContent='New World',3000); return; }
-  newArm=0; b.textContent='New World'; newWorld(); resume(); toast('Hold MINE on a tree to get logs',3500); };
+$('quitBtn').onclick=()=>{ save(); if(mp.on) leaveRoom(); setState('menu'); renderWorlds(); };
+// ----- menu: worlds -----
+const timeAgo=t=>{ const s=(Date.now()-t)/1000; return s<60?'just now':s<3600?Math.floor(s/60)+' min ago':s<86400?Math.floor(s/3600)+' h ago':Math.floor(s/86400)+' days ago'; };
+let delArm='',delT=0;
+function renderWorlds(){ const ws=listWorlds().sort((a,b)=>(b.played||0)-(a.played||0));
+  $('worlds').innerHTML=ws.length?ws.map(w=>`<div class="wrow"><span><b>${esc(w.name)}</b><small>Seed ${w.seed} · played ${timeAgo(w.played||w.created||Date.now())}</small></span><button class="mini go" data-play="${esc(w.id)}">Play</button><button class="mini del" data-del="${esc(w.id)}">${delArm===w.id?'Sure?':'Delete'}</button></div>`).join('')
+    :'<p class="hint">No worlds yet. Create one below.</p>';
+  $('hostWorld').innerHTML=ws.length?ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join(''):'<option value="">Create a world first</option>'; }
+$('worlds').addEventListener('click',e=>{ const p=e.target.closest('[data-play]'),d=e.target.closest('[data-del]');
+  if(p){ if(mp.on) leaveRoom(); else save(); if(loadWorld(p.dataset.play)){ resume(); if(!inv.some(Boolean)) toast('Hold MINE on a tree to get logs',3500); } }
+  else if(d){ const id=d.dataset.del; if(delArm===id&&Date.now()-delT<4000){ delArm=''; deleteWorld(id); } else { delArm=id; delT=Date.now(); setTimeout(()=>{ if(delArm===id){ delArm=''; renderWorlds(); } },4000); } renderWorlds(); } });
+$('createBtn').onclick=()=>{ if(mp.on) leaveRoom(); else save(); const w=createWorld($('newName').value,$('newSeed').value); $('newName').value=''; $('newSeed').value='';
+  loadWorld(w.id); renderWorlds(); resume(); toast('Hold MINE on a tree to get logs',3500); };
+$('mtabs').addEventListener('click',e=>{ const b=e.target.closest('[data-tab]'); if(!b) return;
+  document.querySelectorAll('.mtab').forEach(x=>x.classList.toggle('on',x===b));
+  $('tab-sp').classList.toggle('off',b.dataset.tab!=='sp'); $('tab-mp').classList.toggle('off',b.dataset.tab!=='mp'); if(b.dataset.tab==='mp') sbStart(); });
 
 /* ================= INPUT ================= */
 addEventListener('keydown',e=>{
@@ -748,29 +782,49 @@ function die(){ P.dead=true; P.health=0; renderHearts();
   if(mp.on){ roomPub({t:'sys',m:mp.name+' died'}); sysChat(mp.name+' died'); } }
 
 /* ================= SAVE ================= */
-const SKEY='nuggetcraft-save-v1';
-let worldKey='sp';
-const saveKey=()=>worldKey==='sp'?SKEY:'nuggetcraft-mp-'+worldKey.slice(3);
-function save(){ try{ localStorage.setItem(saveKey(),JSON.stringify({seed,edits:[...edits],inv,sel,pos:[P.pos.x,P.pos.y,P.pos.z],yaw:P.yaw,pitch:P.pitch,time,health:P.dead?20:P.health,spawn,dead:P.dead})); }catch(e){} }
-function loadSave(){ try{ return JSON.parse(localStorage.getItem(saveKey())); }catch(e){ return null; } }
+// Worlds are saved in localStorage: a list of worlds plus one compact save per world.
+const SKEY='nuggetcraft-save-v1',WKEY='nuggetcraft-worlds',WPRE='nuggetcraft-world-',MPPRE='nuggetcraft-mp-';
+let worldKey='none';   // 'w:<id>' = a saved world, 'mp:<ip>' = a joined server, 'none' = menu background only
+const saveKey=()=>worldKey.startsWith('w:')?WPRE+worldKey.slice(2):worldKey.startsWith('mp:')?MPPRE+worldKey.slice(3):null;
+function listWorlds(){ try{ const a=JSON.parse(localStorage.getItem(WKEY)); return Array.isArray(a)?a.filter(w=>w&&typeof w.id==='string'):[]; }catch(e){ return []; } }
+function storeWorlds(a){ try{ localStorage.setItem(WKEY,JSON.stringify(a)); }catch(e){} }
+function encEdits(){ const u=new Uint8Array(edits.size*4); let o=0;
+  for(const [i,b] of edits){ u[o]=i&255; u[o+1]=(i>>8)&255; u[o+2]=(i>>16)&255; u[o+3]=b; o+=4; }
+  let s=''; for(let k=0;k<u.length;k+=0x8000) s+=String.fromCharCode.apply(null,u.subarray(k,k+0x8000)); return btoa(s); }
+function decEdits(s){ const out=[]; let bin=''; try{ bin=atob(s); }catch(e){ return out; }
+  for(let k=0;k+3<bin.length;k+=4) out.push([bin.charCodeAt(k)|(bin.charCodeAt(k+1)<<8)|(bin.charCodeAt(k+2)<<16),bin.charCodeAt(k+3)]); return out; }
+let saveWarned=false;
+function save(){ const key=saveKey(); if(!key||state==='loading') return;
+  try{ localStorage.setItem(key,JSON.stringify({v:2,seed,e64:encEdits(),inv,sel,pos:[P.pos.x,P.pos.y,P.pos.z],yaw:P.yaw,pitch:P.pitch,time,health:P.dead?20:P.health,spawn,dead:P.dead}));
+    if(worldKey.startsWith('w:')){ const ws=listWorlds(),w=ws.find(x=>x.id===worldKey.slice(2)); if(w){ w.played=Date.now(); storeWorlds(ws); } }
+  }catch(e){ if(!saveWarned){ saveWarned=true; toast('Browser storage is full, the world could not be saved',4000); } } }
+function loadSave(){ const key=saveKey(); if(!key) return null; try{ return JSON.parse(localStorage.getItem(key)); }catch(e){ return null; } }
 function applySave(s){
-  if(Array.isArray(s.edits)) for(const [i,b] of s.edits){ world[i]=b; edits.set(i,b); }
-  if(s.spawn) spawn=s.spawn;
-  if(Array.isArray(s.inv)){ inv=new Array(36).fill(null); s.inv.slice(0,36).forEach((v,i)=>{ if(v&&v.id&&v.n>0) inv[i]={id:v.id,n:v.n}; }); }
-  sel=s.sel|0; time=typeof s.time==='number'?s.time:.08; P.health=s.health||20;
-  if(s.pos&&!s.dead){ P.pos.set(s.pos[0],s.pos[1],s.pos[2]); P.yaw=s.yaw||0; P.pitch=s.pitch||0; P.fallMax=P.pos.y; }
+  const list=typeof s.e64==='string'?decEdits(s.e64):Array.isArray(s.edits)?s.edits:[];
+  for(const [i,b] of list) if(Number.isInteger(i)&&i>=0&&i<world.length&&(b===0||BLOCKS[b])){ world[i]=b; edits.set(i,b); }
+  if(s.spawn&&Number.isFinite(s.spawn.x)) spawn=s.spawn;
+  if(Array.isArray(s.inv)){ inv=new Array(36).fill(null); s.inv.slice(0,36).forEach((v,i)=>{ if(v&&(BLOCKS[v.id]||ITEMS[v.id])&&v.n>0) inv[i]={id:v.id,n:Math.min(v.n,64)}; }); }
+  sel=clamp(s.sel|0,0,8); time=typeof s.time==='number'?s.time:.08; P.health=clamp(s.health||20,1,20);
+  if(Array.isArray(s.pos)&&!s.dead&&s.pos.every(Number.isFinite)){ P.pos.set(s.pos[0],s.pos[1],s.pos[2]); P.yaw=s.yaw||0; P.pitch=s.pitch||0; P.fallMax=P.pos.y; }
 }
 function clearWorldEntities(){ while(zombies.length) removeZombie(0); while(drops.length) removeDrop(0);
   for(const e of tnts.values()){ scene.remove(e.m); e.m.material.dispose(); } tnts.clear();
   for(const b of booms){ scene.remove(b.m); b.m.material.dispose(); } booms.length=0; resetBreak(); }
-function newWorld(){ if(mp.on) leaveRoom(); worldKey='sp'; try{ localStorage.removeItem(SKEY); }catch(e){}
-  edits.clear(); generate((R()*1e9)|0); spawn=findSpawn(); resetPlayer(); inv=new Array(36).fill(null); sel=0; time=.08;
-  clearWorldEntities(); queueAll(); renderHotbar(); renderHearts(); }
-function loadSP(){ worldKey='sp'; clearWorldEntities(); edits.clear(); inv=new Array(36).fill(null); sel=0; time=.08;
-  const s=loadSave();
-  if(s&&s.seed!=null){ generate(s.seed); spawn=findSpawn(); resetPlayer(); applySave(s); }
-  else { generate((R()*1e9)|0); spawn=findSpawn(); resetPlayer(); }
-  queueAll(); renderHotbar(); renderHearts(); return !!(s&&s.seed!=null); }
+// Start a world from a seed (with no saved data yet)
+function freshWorld(sd){ clearWorldEntities(); edits.clear(); inv=new Array(36).fill(null); sel=0; time=.08;
+  generate(sd); spawn=findSpawn(); resetPlayer(); }
+function finishLoad(){ queueAll(); renderHotbar(); renderHearts(); }
+function seedFrom(str){ str=String(str||'').trim(); if(!str) return (R()*2147483647)|0; return /^-?\d{1,10}$/.test(str)?(Number(str)|0):hashStr(str); }
+function createWorld(name,seedStr){ const ws=listWorlds();
+  const w={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:String(name||'').trim().slice(0,24)||('World '+(ws.length+1)),seed:seedFrom(seedStr),created:Date.now(),played:Date.now()};
+  ws.push(w); storeWorlds(ws); return w; }
+function loadWorld(id){ const w=listWorlds().find(x=>x.id===id); if(!w) return false;
+  worldKey='w:'+id; freshWorld(w.seed); const s=loadSave(); if(s) applySave(s); finishLoad(); return true; }
+function deleteWorld(id){ storeWorlds(listWorlds().filter(w=>w.id!==id)); try{ localStorage.removeItem(WPRE+id); }catch(e){} if(worldKey==='w:'+id) worldKey='none'; }
+// Older versions kept one save under SKEY; turn it into a world in the list.
+function migrateOldSave(){ try{ const raw=localStorage.getItem(SKEY); if(!raw) return; const s=JSON.parse(raw);
+  if(s&&Number.isFinite(s.seed)){ const w=createWorld('My World',String(s.seed)); w.seed=s.seed|0; const ws=listWorlds(); ws[ws.length-1].seed=s.seed|0; storeWorlds(ws); localStorage.setItem(WPRE+w.id,raw); }
+  localStorage.removeItem(SKEY); }catch(e){} }
 addEventListener('visibilitychange',()=>{ if(document.hidden&&state!=='loading'&&state!=='menu') save(); });
 addEventListener('beforeunload',()=>{ if(state!=='loading') save(); });
 
@@ -844,11 +898,11 @@ function netRecv(topic,s){ let o; try{ o=JSON.parse(s); }catch(e){ return; }
   if(topic===TOP+'lobby'){ if(o.t==='room'&&typeof o.r==='string'&&sanitizeRoom(o.r)===o.r&&o.r){ if(!lobby.has(o.r)) lobby.set(o.r,new Map()); lobby.get(o.r).set(o.id,performance.now()); } return; }
   if(mp.on&&o.r===mp.room&&topic===TOP+'r/'+mp.room) onRoom(o); }
 
-function isHost(){ for(const [id,p] of mp.peers) if(p.j&&(p.j<mp.joined||(p.j===mp.joined&&id<mp.id))) return false; return true; }
+function isHost(){ if(mp.owner) return true; for(const p of mp.peers.values()) if(p.ow) return false; for(const [id,p] of mp.peers) if(p.j&&(p.j<mp.joined||(p.j===mp.joined&&id<mp.id))) return false; return true; }
 function onRoom(o){
   let p=mp.peers.get(o.id);
   if(!p&&(o.t==='p'||o.t==='hi')) p=addPeer(o.id,o.n);
-  if(p){ p.last=performance.now(); if(o.n&&cleanName(o.n)!==p.name) setPeerName(p,o.n); if(Number.isFinite(o.j)) p.j=o.j; }
+  if(p){ p.last=performance.now(); if(o.ow) p.ow=true; if(o.n&&cleanName(o.n)!==p.name) setPeerName(p,o.n); if(Number.isFinite(o.j)) p.j=o.j; }
   switch(o.t){
     case 'hi': if(o.first) sysChat(cleanName(o.n)+' joined'); if(isHost()) sendSync(o.id); sendPos(); break;
     case 'p': if(p&&[o.x,o.y,o.z].every(Number.isFinite)){ p.tx=o.x; p.ty=o.y; p.tz=o.z; p.yaw=+o.yw||0; p.pitch=+o.pt||0; p.cr=!!o.cr; p.sw=!!o.sw; p.dead=!!o.d; } break;
@@ -860,7 +914,7 @@ function onRoom(o){
     case 'chat': if(typeof o.m==='string') addChat(p?p.name:cleanName(o.n),o.m.slice(0,120)); break;
     case 'sys': if(typeof o.m==='string') sysChat(o.m.slice(0,120)); break;
     case 'time': if(!isHost()&&Number.isFinite(o.v)) time=((o.v%1)+1)%1; break;
-    case 'bye': if(p){ sysChat(p.name+' left'); removePeer(o.id); } break;
+    case 'bye': if(p){ sysChat(p.name+' left'); removePeer(o.id); } if(o.ow) serverClosed(); break;
   }
 }
 function validBlock(i,b){ return Number.isInteger(i)&&i>=0&&i<world.length&&Number.isInteger(b)&&(b===0||(BLOCKS[b]&&b!==12)); }
@@ -906,8 +960,8 @@ function updatePeers(dt){ const now=performance.now();
 }
 function hitPeer(p){ const it=ITEMS[heldId()],dx=p.x-P.pos.x,dz=p.z-P.pos.z,d=Math.hypot(dx,dz)||1;
   roomPub({t:'hit',to:p.id,d:(it&&it.dmg)||1,kx:dx/d,kz:dz/d}); }
-function sendPos(){ roomPub({t:'p',n:mp.name,j:mp.joined,x:+P.pos.x.toFixed(2),y:+P.pos.y.toFixed(2),z:+P.pos.z.toFixed(2),yw:+P.yaw.toFixed(2),pt:+P.pitch.toFixed(2),cr:P.crouch?1:0,sw:(P.swingT>0||P.once>0)?1:0,d:P.dead?1:0}); }
-function updateOnline(){ $('online').classList.toggle('off',!mp.on); $('online').textContent=`${mp.room} · ${mp.peers.size+1} online`; }
+function sendPos(){ roomPub({t:'p',n:mp.name,j:mp.joined,ow:mp.owner?1:0,x:+P.pos.x.toFixed(2),y:+P.pos.y.toFixed(2),z:+P.pos.z.toFixed(2),yw:+P.yaw.toFixed(2),pt:+P.pitch.toFixed(2),cr:P.crouch?1:0,sw:(P.swingT>0||P.once>0)?1:0,d:P.dead?1:0}); }
+function updateOnline(){ $('online').classList.toggle('off',!mp.on); $('online').textContent=`${mp.serverName||''} · ${mp.ip||''} · ${mp.peers.size+1} online`; }
 function chatLine(html){ const log=$('chatlog'),d=document.createElement('div'); d.innerHTML=html; log.appendChild(d);
   while(log.children.length>9) log.firstChild.remove(); setTimeout(()=>d.classList.add('old'),10000); }
 function addChat(name,m){ chatLine(`<b>${esc(name)}:</b> ${esc(m)}`); }
@@ -916,43 +970,76 @@ function openChat(){ if(!mp.on||state!=='play') return; chatting=true; keys={}; 
 function closeChat(){ chatting=false; const i=$('chatIn'); i.blur(); i.classList.add('off'); $('chat').classList.remove('typing'); }
 $('chatIn').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ const m=$('chatIn').value.trim().slice(0,120); if(m){ roomPub({t:'chat',n:mp.name,m}); addChat(mp.name,m); } closeChat(); } else if(e.key==='Escape') closeChat(); });
 
-function joinRoom(room,name){
-  room=sanitizeRoom(room)||'public'; name=cleanName(name);
+// ----- servers with IPs (listed live through Neon Realtime) -----
+const API_BASE=/\.vercel\.app$|^localhost$|^127\./.test(location.hostname)?'':'https://nuggetcraft.vercel.app';
+const IP_RE=/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+async function api(method,body,query){ const r=await fetch(API_BASE+'/api/servers'+(query||''),{method,headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined,cache:'no-store',keepalive:method==='POST'&&body&&body.action==='close'});
+  let j={}; try{ j=await r.json(); }catch(e){} if(!r.ok) throw new Error(j.error||('Server list error '+r.status)); return j; }
+const mpMsg=m=>{ $('mpMsg').textContent=m; };
+function connectServer(info,owner,worldId,token){
+  const ip=info.ip,name=cleanName($('mpName').value);
   try{ localStorage.setItem('nuggetcraft-name',name); }catch(e){}
-  if(mp.on) leaveRoom(); else if(worldKey==='sp'&&state!=='loading') save();
-  mp.on=true; mp.room=room; mp.name=name; mp.joined=Date.now(); mp.synced=false; mp.seed=hashStr('room:'+room); syncParts=null;
-  worldKey='mp:'+room; clearWorldEntities(); edits.clear();
-  generate(mp.seed); spawn=findSpawn(); resetPlayer(); inv=new Array(36).fill(null); sel=0; time=.08;
-  const s=loadSave(); if(s) applySave(s);
-  queueAll(); renderHotbar(); renderHearts();
-  netSub(TOP+'r/'+room);
-  roomPub({t:'hi',n:name,j:mp.joined,first:1});
-  for(const ms of [1500,4000,8000]) setTimeout(()=>{ if(mp.on&&mp.room===room&&!mp.synced) roomPub({t:'hi',n:name,j:mp.joined}); },ms);
-  $('chat').classList.remove('off'); $('chatlog').innerHTML=''; updateOnline(); sysChat(`Joined server "${room}". Press T to chat.`);
-  $('playBtn').textContent='Play'; resume(); }
-function leaveRoom(){ if(!mp.on) return; roomPub({t:'bye'}); save(); mp.on=false;
+  if(mp.on) leaveRoom(); else save();
+  Object.assign(mp,{on:true,ip,room:'ip-'+ip.replace(/\./g,'-'),name,owner:!!owner,token:token||'',serverName:info.name||ip,joined:Date.now(),synced:!!owner,seed:info.seed|0,beatT:20});
+  syncParts=null;
+  if(owner) loadWorld(worldId);
+  else { worldKey='mp:'+ip; freshWorld(mp.seed); const s=loadSave(); if(s&&(s.seed|0)===mp.seed) applySave(s); finishLoad(); }
+  netSub(TOP+'r/'+mp.room);
+  roomPub({t:'hi',n:name,j:mp.joined,first:1,ow:mp.owner?1:0});
+  for(const ms of [1500,4000,8000]) setTimeout(()=>{ if(mp.on&&mp.ip===ip&&!mp.synced) roomPub({t:'hi',n:name,j:mp.joined}); },ms);
+  $('chat').classList.remove('off'); $('chatlog').innerHTML=''; updateOnline();
+  sysChat(owner?`Hosting "${mp.serverName}" at IP ${ip}. Friends can join with that IP. Press T to chat.`:`Joined "${mp.serverName}" (${ip}). Press T to chat.`);
+  resume(); }
+function leaveRoom(){ if(!mp.on) return; roomPub({t:'bye',ow:mp.owner?1:0}); save();
+  if(mp.owner&&mp.token) api('POST',{action:'close',ip:mp.ip,token:mp.token}).catch(()=>{});
+  mp.on=false; mp.owner=false; mp.token='';
   for(const id of [...mp.peers.keys()]) removePeer(id); netQueue=[];
   $('chat').classList.add('off'); updateOnline(); }
-function renderRooms(){ const now=performance.now(),list=[];
-  for(const [r,m] of lobby){ for(const [id,t] of m) if(now-t>13000) m.delete(id); if(m.size) list.push([r,m.size]); }
-  list.sort((a,b)=>b[1]-a[1]);
-  $('rooms').innerHTML=list.length?list.slice(0,8).map(([r,n])=>`<button class="room" data-room="${esc(r)}">${esc(r)}<span>${n} online</span></button>`).join('')
-    :'<p class="hint">No open servers right now. Type a server name and join to start one. Friends join by typing the same name.</p>'; }
-$('rooms').addEventListener('click',e=>{ const b=e.target.closest('[data-room]'); if(!b||$('joinBtn').disabled) return; $('mpRoom').value=b.dataset.room; joinRoom(b.dataset.room,$('mpName').value); });
-$('joinBtn').onclick=()=>joinRoom($('mpRoom').value,$('mpName').value);
+function serverClosed(){ sysChat('The host closed the server'); setTimeout(()=>{ if(!mp.on||mp.owner) return; leaveRoom(); setState('menu'); renderWorlds(); toast('The host closed the server',3000); },1500); }
+$('ipBtn').onclick=async()=>{ const ip=$('ipIn').value.trim(); if(!IP_RE.test(ip)){ mpMsg('Type a server IP like 84.21.9.130'); return; }
+  mpMsg('Connecting to '+ip+'...'); try{ const j=await api('GET',null,'?ip='+encodeURIComponent(ip)); mpMsg(''); connectServer(j.server,false); }catch(e){ mpMsg(e.message); } };
+$('hostBtn').onclick=async()=>{ const wid=$('hostWorld').value, w=listWorlds().find(x=>x.id===wid); if(!w){ mpMsg('Create a world in Singleplayer first, then host it here.'); return; }
+  const b=$('hostBtn'); b.disabled=true; mpMsg('Starting your server...');
+  try{ const j=await api('POST',{action:'create',name:$('hostName').value||(cleanName($('mpName').value)+"'s server"),motd:$('hostMotd').value,host:cleanName($('mpName').value),seed:w.seed,max:10,public:$('hostPublic').checked});
+    mpMsg(''); connectServer({ip:j.ip,name:$('hostName').value||(cleanName($('mpName').value)+"'s server"),seed:w.seed},true,wid,j.token); }
+  catch(e){ mpMsg(e.message); } b.disabled=false; };
+$('servers').addEventListener('click',e=>{ const b=e.target.closest('[data-ip]'); if(!b) return; $('ipIn').value=b.dataset.ip; $('ipBtn').onclick(); });
+// Live server list
+const SB={rows:[],client:null,sub:null,started:false,status:'loading',timer:0};
+let rtMod=null;
+async function loadRT(){ if(rtMod) return rtMod; for(const u of ['https://esm.sh/@neon/realtime/client','https://cdn.jsdelivr.net/npm/@neon/realtime/client/+esm']){ try{ const m=await import(u); if(m&&m.createRealtimeClient){ rtMod=m; return m; } }catch(e){} } return null; }
+function sbStart(){ if(SB.started) return; SB.started=true; sbFetch(); setInterval(()=>{ if(state==='menu') renderServers(); },5000); }
+function dropSub(){ try{ SB.sub&&SB.sub.unsubscribe(); }catch(e){} SB.sub=null; }
+async function sbFetch(){ clearTimeout(SB.timer); let next=8000;
+  try{ const j=await api('GET');
+    if(!SB.sub||SB.status!=='live'){ SB.rows=Array.isArray(j.servers)?j.servers:[]; }
+    const m=j.url&&j.sealed?await loadRT():null;
+    if(m){ if(!SB.client) SB.client=m.createRealtimeClient({url:j.url});
+      if(!SB.sub){ SB.sub=SB.client.subscribe(j.sealed,{initialData:SB.rows});
+        SB.sub.onChange(s=>{ if(s.data) SB.rows=[...s.data]; SB.status=s.status; if(s.status==='error'){ dropSub(); clearTimeout(SB.timer); SB.timer=setTimeout(sbFetch,3000); } renderServers(); }); }
+      else await SB.sub.renew(j.sealed).catch(()=>{ dropSub(); });
+      next=Math.max(5000,(j.sealed.expiresAt||0)-Date.now()-15000); if(SB.status==='loading') SB.status='connecting'; }
+    else SB.status='polling';
+  }catch(e){ SB.status='offline'; SB.err=e.message; }
+  renderServers(); SB.timer=setTimeout(sbFetch,next); }
+function renderServers(){ const now=Date.now();
+  const rows=SB.rows.filter(r=>r&&IP_RE.test(r.ip)&&(!r.last_seen||now-new Date(r.last_seen).getTime()<80000));
+  $('sbStatus').textContent=SB.status==='offline'?`Couldn't reach the server list (${SB.err||'offline'}). You can still connect by IP when it's back.`
+    :SB.status==='live'?`${rows.length} server${rows.length===1?'':'s'} online · updates live`:rows.length?`${rows.length} server${rows.length===1?'':'s'} online`:'Loading the server list...';
+  $('servers').innerHTML=rows.length?rows.map(r=>`<div class="srow"><span><b>${esc(r.name)}</b><small>${r.motd?esc(r.motd)+' · ':''}hosted by ${esc(r.host_name)} · ${r.players|0}/${r.max_players|0} players</small><small class="ip">${esc(r.ip)}</small></span><button class="mini go" data-ip="${esc(r.ip)}">Join</button></div>`).join('')
+    :(SB.status==='offline'?'':'<p class="hint">No public servers right now. Host one below and it shows up here for everyone.</p>'); }
 { let n=''; try{ n=localStorage.getItem('nuggetcraft-name')||''; }catch(e){} $('mpName').value=n||('Player'+((R()*900+100)|0)); }
 function netTick(dt){
   if(mp.on){
     mp.sendT+=dt; if(mp.sendT>=.1){ mp.sendT=0; sendPos(); }
     netFlushT+=dt; if(netFlushT>=.1&&netQueue.length){ netFlushT=0; for(let i=0;i<netQueue.length;i+=4000) roomPub({t:'bs',l:netQueue.slice(i,i+4000)}); netQueue=[]; }
-    mp.lobbyT-=dt; if(mp.lobbyT<=0){ mp.lobbyT=4; netPub(TOP+'lobby',{t:'room',r:mp.room}); }
     mp.timeT-=dt; if(mp.timeT<=0){ mp.timeT=5; if(isHost()) roomPub({t:'time',v:time}); }
+    if(mp.owner){ mp.beatT-=dt; if(mp.beatT<=0){ mp.beatT=20; api('POST',{action:'beat',ip:mp.ip,token:mp.token,players:mp.peers.size+1}).catch(e=>sysChat('Server list: '+e.message)); } }
     updatePeers(dt);
   }
-  if(state==='menu'){ mp.roomsT-=dt; if(mp.roomsT<=0){ mp.roomsT=2; renderRooms(); } }
 }
 netStart();
-addEventListener('beforeunload',()=>{ if(mp.on) roomPub({t:'bye'}); });
+addEventListener('beforeunload',()=>{ if(mp.on){ roomPub({t:'bye',ow:mp.owner?1:0}); if(mp.owner&&mp.token) api('POST',{action:'close',ip:mp.ip,token:mp.token}).catch(()=>{}); } });
 
 /* ================= MAIN UPDATE ================= */
 const eye=new THREE.Vector3(),_dir=new THREE.Vector3();
@@ -1107,8 +1194,10 @@ function frame(now){
 setState('loading'); renderHearts();
 requestAnimationFrame(frame);
 setTimeout(()=>{
-  if(loadSP()) $('playBtn').textContent='Continue';
-  $('loading').classList.add('off'); $('playBtn').disabled=false; $('newBtn').disabled=false; $('joinBtn').disabled=false;
+  migrateOldSave(); const ws=listWorlds().sort((a,b)=>(b.played||0)-(a.played||0));
+  if(!(ws.length&&loadWorld(ws[0].id))){ worldKey='none'; freshWorld((R()*2147483647)|0); finishLoad(); }
+  renderWorlds();
+  $('loading').classList.add('off'); $('createBtn').disabled=false; $('hostBtn').disabled=false;
   setState('menu');
 },60);
 </script>

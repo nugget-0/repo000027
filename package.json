@@ -1,0 +1,9 @@
+{
+  "name": "nuggetcraft",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@neon/realtime": "latest",
+    "@neondatabase/serverless": "^1.0.0"
+  }
+}
