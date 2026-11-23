@@ -11,7 +11,7 @@ import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 
 const sql = neon(process.env.DATABASE_URL);
 const realtime = createRealtime({ secret: process.env.NEON_REALTIME_SECRET, db: 'neondb' });
 
-const LIST_SQL = 'SELECT s.ip, s.name, s.motd, s.host_name, s.players, s.max_players, s.mods, s.last_seen, (p.ip IS NOT NULL) AS pinned FROM servers s LEFT JOIN pins p ON p.ip = s.ip WHERE s.is_public = true ORDER BY (p.ip IS NOT NULL) DESC, s.players DESC, s.ip LIMIT 60';
+const LIST_SQL = 'SELECT s.ip, s.name, s.motd, s.host_name, s.players, s.max_players, s.mods, s.last_seen, (p.ip IS NOT NULL) AS pinned FROM servers s LEFT JOIN pins p ON p.ip = s.ip WHERE s.is_public = true ORDER BY (p.ip IS NOT NULL) DESC, s.last_seen DESC, s.ip LIMIT 60';
 const NUGGETAUTH = 'https://nuggetauth.vercel.app';
 const ADMINS = (process.env.NUGGETCRAFT_ADMINS || 'nugget').toLowerCase().split(',').map(x => x.trim()).filter(Boolean);
 const MAX_SERVERS = 300;
@@ -58,18 +58,19 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
-    // Servers that stopped sending heartbeats disappear after 90 seconds.
-    await sql`DELETE FROM servers WHERE last_seen < now() - interval '90 seconds'`;
+    // Servers stay listed (online or offline); ones nobody has played for 30 days are cleaned up.
+    await sql`DELETE FROM servers WHERE last_seen < now() - interval '30 days'`;
 
     if (req.method === 'GET') {
       const q = req.query || {};
       if (q.badge) { const d = unpack(q.badge); return res.status(200).json(d && d.t === 'badge' ? { ok: true, username: d.u, pid: d.pid } : { ok: false }); }
+      if (q.world) { const ip = addr(q.world); const rows = await sql`SELECT data, updated_at FROM server_worlds WHERE ip = ${ip}`; return res.status(200).json(rows.length ? { e3: rows[0].data, updated_at: rows[0].updated_at } : { e3: null }); }
       if (q.cmd) { const d = unpack(q.cmd); return res.status(200).json(d && d.t === 'cmd' ? { ok: true, username: d.u, cmd: d.cmd, n: d.n } : { ok: false }); }
       const ip = addr(q.ip);
       if (ip) {
         if (!IP_RE.test(ip)) return res.status(400).json({ error: 'That does not look like a server IP' });
-        const rows = await sql`SELECT ip, name, motd, host_name, players, max_players, seed, mods FROM servers WHERE ip = ${ip}`;
-        if (!rows.length) return res.status(404).json({ error: 'No server is online at that IP' });
+        const rows = await sql`SELECT ip, name, motd, host_name, players, max_players, seed, mods, last_seen FROM servers WHERE ip = ${ip}`;
+        if (!rows.length) return res.status(404).json({ error: 'There is no server at that IP' });
         return res.status(200).json({ server: rows[0] });
       }
       const [servers, sealed] = await Promise.all([sql.query(LIST_SQL), realtime.seal({ query: rawSql(LIST_SQL) })]);
@@ -99,6 +100,7 @@ export default async function handler(req, res) {
       if (b.action === 'remove') {
         const ip = addr(b.ip);
         await sql`DELETE FROM servers WHERE ip = ${ip}`;
+        await sql`DELETE FROM server_worlds WHERE ip = ${ip}`;
         return res.status(200).json({ ok: true });
       }
       const ip = addr(b.ip);
@@ -156,6 +158,22 @@ export default async function handler(req, res) {
       return res.status(200).json({ ip, token });
     }
 
+    // Anyone playing on a server keeps it marked online, and saves its world so it carries on when the host is away.
+    if (b.action === 'ping' || b.action === 'saveworld') {
+      const ip = addr(b.ip);
+      if (!IP_RE.test(ip)) return res.status(400).json({ error: 'Bad server IP' });
+      const [sv] = await sql`SELECT ip FROM servers WHERE ip = ${ip}`;
+      if (!sv) return res.status(404).json({ error: 'Server not found' });
+      if (b.action === 'ping') {
+        await sql`UPDATE servers SET last_seen = now(), players = LEAST(${int(b.players, 0, 50, 1)}, max_players) WHERE ip = ${ip}`;
+        return res.status(200).json({ ok: true });
+      }
+      const data = typeof b.e3 === 'string' ? b.e3 : '';
+      if (data.length > 3500000 || !/^[A-Za-z0-9+/=]*$/.test(data)) return res.status(413).json({ error: 'World is too big to save online' });
+      await sql`INSERT INTO server_worlds (ip, data, updated_at) VALUES (${ip}, ${data}, now()) ON CONFLICT (ip) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`;
+      return res.status(200).json({ ok: true });
+    }
+
     const ip = addr(b.ip), token = clean(b.token, 64);
     if (!IP_RE.test(ip) || !token) return res.status(400).json({ error: 'Missing server IP or token' });
 
@@ -167,7 +185,8 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
     if (b.action === 'close') {
-      await sql`DELETE FROM servers WHERE ip = ${ip} AND token_hash = ${hash(token)}`;
+      const gone = await sql`DELETE FROM servers WHERE ip = ${ip} AND token_hash = ${hash(token)} RETURNING ip`;
+      if (gone.length) await sql`DELETE FROM server_worlds WHERE ip = ${ip}`;
       return res.status(200).json({ ok: true });
     }
     return res.status(400).json({ error: 'Unknown action' });

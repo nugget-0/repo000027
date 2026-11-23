@@ -92,7 +92,8 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
 .mprow select{font:16px system-ui,sans-serif;padding:10px;min-height:46px;background:#111318;color:#fff;border:3px solid #000;width:100%}
 .chk{display:flex;gap:8px;align-items:center;margin:4px 0 10px;font-size:14px;color:#d9dde6}.chk input{width:20px;height:20px}
 .wrow,.srow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;background:#3a3d46;border:2px solid #000;padding:8px 8px 8px 12px}
-.srow{grid-template-columns:minmax(0,1fr) auto}.srow.adm{grid-template-columns:minmax(0,1fr) auto auto auto}.srow.pin{border-color:var(--gold);box-shadow:inset 3px 0 0 var(--gold)}
+.srow{grid-template-columns:minmax(0,1fr) auto}.srow.adm{grid-template-columns:minmax(0,1fr) auto auto auto}.srow.off{opacity:.72}.srow .on{color:#7fe07f;font-weight:600}
+.srow.pin{border-color:var(--gold);box-shadow:inset 3px 0 0 var(--gold)}
 .tag{display:inline-block;font:8px 'Press Start 2P',monospace;background:var(--gold);color:#1a1a1a;padding:3px 5px;margin-right:6px;vertical-align:2px}
 .narow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 6px}.narow .hint{margin:0}
 .wrow b,.srow b{display:block;font-size:15px;overflow-wrap:anywhere}.wrow small,.srow small{display:block;color:#c3c7d0;font-size:12px;overflow-wrap:anywhere}
@@ -172,7 +173,7 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
       <p id="sbStatus" class="hint">Loading the server list...</p>
       <div id="servers"></div>
       <h3 class="px">Direct connect</h3>
-      <div class="mprow ipr"><input id="ipIn" maxlength="15" placeholder="Server IP, like 84.21.9.130" aria-label="Server IP" inputmode="decimal"><button class="btn" id="ipBtn">Connect</button></div>
+      <div class="mprow ipr"><input id="ipIn" maxlength="40" placeholder="Server IP, like 84.21.9.130 or play.nugget" aria-label="Server IP" type="text" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn" id="ipBtn">Connect</button></div>
       <h3 class="px">Server maker</h3>
       <div class="maker">
         <label class="fl">World<select id="hostWorld"></select></label>
@@ -723,7 +724,8 @@ function streamChunks(fx,fz,genBudget,meshBudget,dt){
 }
 function flushDirty(){ for(const k of dirty){ const c=cdata.get(k); if(c&&c.meshed) buildChunk(c); } dirty.clear(); }
 const edits=new Map(),editsByChunk=new Map();
-function recordEdit(i,b){ edits.set(i,b); const [x,,z]=unpack(i),k=ck(Math.floor(x/CS),Math.floor(z/CS)); let m=editsByChunk.get(k); if(!m) editsByChunk.set(k,m=new Map()); m.set(i,b); }
+let editVer=0;
+function recordEdit(i,b){ editVer++; edits.set(i,b); const [x,,z]=unpack(i),k=ck(Math.floor(x/CS),Math.floor(z/CS)); let m=editsByChunk.get(k); if(!m) editsByChunk.set(k,m=new Map()); m.set(i,b); }
 function clearEdits(){ edits.clear(); editsByChunk.clear(); }
 function setBlock(x,y,z,b,remote){ if(y<0||y>=H) return; const i=idx(x,y,z); rawSet(x,y,z,b); recordEdit(i,b); if(mp.on&&!remote) netQueue.push(i,b);
   if(RS_IDS.has(b)) rsSet.add(i); else rsSet.delete(i); if(GROW.has(b)) growSet.add(i); else growSet.delete(i); rsDirty=true;
@@ -1242,7 +1244,7 @@ function onSync(o){ if(mp.synced||!Number.isInteger(o.n)||o.n<1||o.n>400) return
   if(syncParts.got.size<o.n) return;
   resetWorld(mp.seed);
   for(let k=0;k<o.n;k++){ const e=syncParts.got.get(k)||[]; for(let j=0;j+1<e.length;j+=2) if(validBlock(e[j],e[j+1])) recordEdit(e[j],e[j+1]); }
-  mp.synced=true; syncParts=null; ensureChunk(P.pos.x,P.pos.z);
+  mp.synced=true; mp.liveSynced=true; syncParts=null; ensureChunk(P.pos.x,P.pos.z);
   let g=0; while(g++<70&&collides(P.pos.x,P.pos.y,P.pos.z,P.hw,P.h)) P.pos.y+=1;
   sysChat('World synced with the server'); }
 
@@ -1304,20 +1306,29 @@ function connectServer(info,owner,worldId,token){
   netSub(TOP+'r/'+mp.room);
   roomPub({t:'hi',n:name,j:mp.joined,first:1,ow:mp.owner?1:0});
   for(const ms of [1500,4000,8000]) setTimeout(()=>{ if(mp.on&&mp.ip===ip&&!mp.synced) roomPub({t:'hi',n:name,j:mp.joined}); },ms);
+  mp.liveSynced=false; mp.upVer=-1; mp.upT=30; mp.pingT=0;
+  api('GET',null,'?world='+encodeURIComponent(ip)).then(j=>{
+    if(!mp.on||mp.ip!==ip||!j.e3||mp.liveSynced) return;
+    const list=decEdits(j.e3); for(const [i,b] of list) if(validBlock(i,b)) recordEdit(i,b);
+    dropAllChunks(); ensureChunk(P.pos.x,P.pos.z); mp.upVer=editVer; if(!owner) sysChat('Loaded the saved world from the server');
+  }).catch(()=>{});
+  if(!owner) setTimeout(()=>{ if(mp.on&&mp.ip===ip&&!mp.synced){ mp.synced=true; sysChat('Nobody else is online, so your game is running this server for now'); } },9000);
   $('chat').classList.remove('off'); $('chatlog').innerHTML=''; updateOnline();
   sysChat(owner?`Hosting "${mp.serverName}" at IP ${ip}. Friends can join with that IP. Press T to chat.`:`Joined "${mp.serverName}" (${ip}). Press T to chat.`);
   if(mp.mods.size) sysChat('Mods: '+[...mp.mods].map(m=>MOD_NAME[m]).join(', ')+(modOn('shop')?' · press B for the shop':''));
   adminBadge=null; if(isAdminUser) getBadge();
   renderHearts(); resume(); }
 function kicked(msg){ sysChat(msg); leaveRoom(); setState('menu'); renderWorlds(); mpMsg(msg); toast(msg,3500); }
-function leaveRoom(){ if(!mp.on) return; if(state==='shop') setState('play'); roomPub({t:'bye',ow:mp.owner?1:0}); save();
-  if(mp.owner&&mp.token) api('POST',{action:'close',ip:mp.ip,token:mp.token}).catch(()=>{});
+function leaveRoom(){ if(!mp.on) return; if(state==='shop') setState('play'); roomPub({t:'bye',ow:mp.owner?1:0}); save(); uploadWorld(true);
   mp.on=false; mp.owner=false; mp.token=''; mp.mods=new Set();
   for(const id of [...mp.peers.keys()]) removePeer(id); netQueue=[];
   $('chat').classList.add('off'); updateOnline(); }
-function serverClosed(){ sysChat('The host closed the server'); setTimeout(()=>{ if(!mp.on||mp.owner) return; leaveRoom(); setState('menu'); renderWorlds(); toast('The host closed the server',3000); },1500); }
+function serverClosed(){ sysChat('The host left. You can keep playing, the world keeps saving online.'); }
+// Whoever is running the server (the host, or the oldest player while the host is away) saves the world online.
+function uploadWorld(force){ if(!mp.on||!mp.synced||!isHost()) return; if(!force&&mp.upVer===editVer) return; mp.upVer=editVer;
+  api('POST',{action:'saveworld',ip:mp.ip,e3:encEdits()}).catch(e=>sysChat('Could not save the world online: '+e.message)); }
 $('ipBtn').onclick=async()=>{ const ip=$('ipIn').value.trim().toLowerCase(); if(!IP_RE.test(ip)){ mpMsg('Type a server IP like 84.21.9.130 or play.nugget'); return; }
-  mpMsg('Connecting to '+ip+'...'); try{ const j=await api('GET',null,'?ip='+encodeURIComponent(ip)); const sv=j.server; if((sv.players|0)>=(sv.max_players|0)){ mpMsg(`That server is full (${sv.players}/${sv.max_players} players)`); return; } mpMsg(''); connectServer(sv,false); }catch(e){ mpMsg(e.message); } };
+  mpMsg('Connecting to '+ip+'...'); try{ const j=await api('GET',null,'?ip='+encodeURIComponent(ip)); const sv=j.server,svOn=sv.last_seen&&Date.now()-new Date(sv.last_seen).getTime()<150000; if(svOn&&(sv.players|0)>=(sv.max_players|0)){ mpMsg(`That server is full (${sv.players}/${sv.max_players} players)`); return; } mpMsg(''); connectServer(sv,false); }catch(e){ mpMsg(e.message); } };
 $('modList').innerHTML=MODS.map(m=>`<label class="mod"><input type="checkbox" value="${m.id}"><b>${m.name}</b><small>${m.desc}</small></label>`).join('');
 { let c={}; try{ c=JSON.parse(localStorage.getItem('nuggetcraft-hostcfg'))||{}; }catch(e){}
   if(c.name) $('hostName').value=c.name; if(c.motd) $('hostMotd').value=c.motd; if(c.ip) $('hostIp').value=c.ip; if(c.max) $('hostMax').value=String(c.max);
@@ -1357,10 +1368,11 @@ async function sbFetch(){ clearTimeout(SB.timer); let next=8000;
   }catch(e){ SB.status='offline'; SB.err=e.message; }
   renderServers(); SB.timer=setTimeout(sbFetch,next); }
 function renderServers(){ const now=Date.now();
-  const rows=SB.rows.filter(r=>r&&IP_RE.test(r.ip)&&(!r.last_seen||now-new Date(r.last_seen).getTime()<80000));
+  const rows=SB.rows.filter(r=>r&&IP_RE.test(r.ip)); for(const r of rows) r.online=!!r.last_seen&&now-new Date(r.last_seen).getTime()<150000;
+  const nOn=rows.filter(r=>r.online).length;
   $('sbStatus').textContent=SB.status==='offline'?`Couldn't reach the server list (${SB.err||'offline'}). You can still connect by IP when it's back.`
-    :SB.status==='live'?`${rows.length} server${rows.length===1?'':'s'} online · updates live`:rows.length?`${rows.length} server${rows.length===1?'':'s'} online`:'Loading the server list...';
-  $('servers').innerHTML=rows.length?rows.map(r=>`<div class="srow${r.pinned?' pin':''}${isAdminUser?' adm':''}"><span><b>${r.pinned?'<span class="tag">PINNED</span>':''}${esc(r.name)}</b><small>${r.motd?esc(r.motd)+' · ':''}hosted by ${esc(r.host_name)} · ${r.players|0}/${r.max_players|0} players${(r.players|0)>=(r.max_players|0)?' · full':''}</small>${r.mods?`<small class="modtags">${[...parseMods(r.mods)].map(m=>`<i>${MOD_NAME[m]}</i>`).join('')}</small>`:''}<small class="ip">${esc(r.ip)}</small></span>${isAdminUser?`<button class="mini del" data-rm="${esc(r.ip)}">Remove</button>`:''}${isAdminUser?`<button class="mini" data-pin="${esc(r.ip)}" data-on="${r.pinned?1:0}">${r.pinned?'Unpin':'Pin'}</button>`:''}<button class="mini go" data-ip="${esc(r.ip)}">Join</button></div>`).join('')
+    :rows.length||SB.status==='live'?`${nOn} online, ${rows.length-nOn} offline${SB.status==='live'?' · updates live':''}`:'Loading the server list...';
+  $('servers').innerHTML=rows.length?rows.map(r=>`<div class="srow${r.pinned?' pin':''}${isAdminUser?' adm':''}${r.online?'':' off'}"><span><b>${r.pinned?'<span class="tag">PINNED</span>':''}${esc(r.name)}</b><small>${r.motd?esc(r.motd)+' · ':''}hosted by ${esc(r.host_name)} · ${r.online?`<b class="on">Online</b> ${r.players|0}/${r.max_players|0} players${(r.players|0)>=(r.max_players|0)?' · full':''}`:`Offline · last played ${timeAgo(new Date(r.last_seen).getTime())}`}</small>${r.mods?`<small class="modtags">${[...parseMods(r.mods)].map(m=>`<i>${MOD_NAME[m]}</i>`).join('')}</small>`:''}<small class="ip">${esc(r.ip)}</small></span>${isAdminUser?`<button class="mini del" data-rm="${esc(r.ip)}">Remove</button>`:''}${isAdminUser?`<button class="mini" data-pin="${esc(r.ip)}" data-on="${r.pinned?1:0}">${r.pinned?'Unpin':'Pin'}</button>`:''}<button class="mini go" data-ip="${esc(r.ip)}">${r.online?'Join':'Play'}</button></div>`).join('')
     :(SB.status==='offline'?'':'<p class="hint">No public servers right now. Host one below and it shows up here for everyone.</p>'); }
 { let n=''; try{ n=localStorage.getItem('nuggetcraft-name')||''; }catch(e){} $('mpName').value=n||('Player'+((R()*900+100)|0)); }
 // ----- Sign in with Nugget: admins (checked on the server) can pin servers -----
@@ -1422,12 +1434,17 @@ function netTick(dt){
     mp.sendT+=dt; if(mp.sendT>=.1*Math.max(1,mp.peers.size/8)){ mp.sendT=0; sendPos(); }
     netFlushT+=dt; if(netFlushT>=.1&&netQueue.length){ netFlushT=0; for(let i=0;i<netQueue.length;i+=4000) roomPub({t:'bs',l:netQueue.slice(i,i+4000)}); netQueue=[]; }
     mp.timeT-=dt; if(mp.timeT<=0){ mp.timeT=5; if(isHost()) roomPub({t:'time',v:time}); }
-    if(mp.owner){ mp.beatT-=dt; if(mp.beatT<=0){ mp.beatT=20; api('POST',{action:'beat',ip:mp.ip,token:mp.token,players:mp.peers.size+1}).catch(e=>sysChat('Server list: '+e.message)); } }
+    mp.beatT-=dt; if(mp.beatT<=0){ mp.beatT=20;
+      if(mp.owner) api('POST',{action:'beat',ip:mp.ip,token:mp.token,players:mp.peers.size+1}).catch(e=>{ if(/not found/i.test(e.message)) sysChat('This server was removed from the list. Host it again from the menu to bring it back.'); });
+      else if(isHost()) api('POST',{action:'ping',ip:mp.ip,players:mp.peers.size+1}).catch(()=>{}); }
+    mp.upT-=dt; if(mp.upT<=0){ mp.upT=60; uploadWorld(false); }
     updatePeers(dt);
   }
 }
 netStart();
-addEventListener('beforeunload',()=>{ if(mp.on){ roomPub({t:'bye',ow:mp.owner?1:0}); if(mp.owner&&mp.token) api('POST',{action:'close',ip:mp.ip,token:mp.token}).catch(()=>{}); } });
+addEventListener('beforeunload',()=>{ if(mp.on){ roomPub({t:'bye',ow:mp.owner?1:0}); uploadWorld(true); } });
+// Background tabs slow timers down: catch up straight away when you come back, and save the world when you leave.
+addEventListener('visibilitychange',()=>{ if(!mp.on) return; if(document.hidden) uploadWorld(false); else { mp.beatT=0; mp.sendT=1; } });
 
 /* ================= REDSTONE ================= */
 const RS_IDS=new Set([26,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55]);
