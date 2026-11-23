@@ -78,7 +78,20 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
 #bPlace{right:108px;bottom:72px}
 #bSprint{right:18px;bottom:190px}
 #bCrouch{right:18px;bottom:264px}
-#bInv{right:12px}#bView{right:78px}#bPause{right:144px}
+#bInv{right:12px}#bView{right:78px}#bPause{right:144px}#bChat{right:210px}
+.mp{border-top:3px solid rgba(255,255,255,.1);margin-top:6px;padding-top:16px;margin-bottom:16px}
+.mprow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-bottom:10px}
+.mprow input,#chatIn{font:16px system-ui,sans-serif;padding:11px 12px;min-height:46px;background:#111318;color:#fff;border:3px solid #000;box-shadow:inset 0 0 0 2px rgba(255,255,255,.12);width:100%}
+.mprow input:focus-visible,#chatIn:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
+#rooms{display:grid;gap:6px;margin-top:10px}
+.room{display:flex;justify-content:space-between;gap:10px;font:14px system-ui,sans-serif;color:#fff;background:#3a3d46;border:2px solid #000;padding:10px 12px;min-height:44px;cursor:pointer;text-align:left}
+.room span{color:var(--gold);white-space:nowrap}.room:hover{background:#474b57}
+#online{position:fixed;top:10px;left:10px;font:9px 'Press Start 2P',monospace;background:rgba(0,0,0,.45);padding:8px 10px;pointer-events:none;text-shadow:1px 1px 0 #000}
+#chat{position:fixed;left:10px;top:44px;width:min(420px,calc(100vw - 20px));pointer-events:none}
+#chatlog div{font-size:14px;background:rgba(0,0,0,.42);padding:3px 8px;margin-bottom:2px;text-shadow:1px 1px 0 #000;transition:opacity 1s;overflow-wrap:anywhere}
+#chatlog div.old{opacity:0}#chatlog b{color:var(--gold);font-weight:600}#chatlog .sys{color:#ffe28a}
+#chatIn{pointer-events:auto;margin-top:4px}
+#chat.typing #chatlog div{opacity:1}
 @media(max-width:600px){.slot{width:37px;height:37px}.slot img{width:27px;height:27px}#invGrid{grid-template-columns:repeat(9,37px)}.invbody{grid-template-columns:minmax(0,1fr)}.card{padding:18px}#toast{bottom:96px;font-size:9px}}
 @media(max-height:500px){#joy{bottom:60px;width:120px;height:120px}#knob{left:33px;top:33px}#bJump{bottom:70px}#bMine{bottom:120px}#bPlace{bottom:46px}#bSprint{bottom:156px}#bCrouch{bottom:226px;right:96px}}
 </style>
@@ -88,6 +101,8 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
 <div id="cross" class="off"></div>
 <div id="flash"></div>
 <div id="toast"></div>
+<div id="online" class="off"></div>
+<div id="chat" class="off"><div id="chatlog"></div><input id="chatIn" class="off" maxlength="120" placeholder="Say something, Enter to send" aria-label="Chat message"></div>
 <div id="hud" class="off"><div id="hearts"></div><div id="hotbar"></div></div>
 <div id="touch" class="off">
   <div id="joy"><div id="knob"></div></div>
@@ -99,6 +114,7 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
   <div class="tb sm" id="bInv">BAG</div>
   <div class="tb sm" id="bView">VIEW</div>
   <div class="tb sm" id="bPause">II</div>
+  <div class="tb sm off" id="bChat">CHAT</div>
 </div>
 <div id="menu" class="screen">
   <div class="card">
@@ -108,6 +124,12 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
     <div class="btns">
       <button class="btn primary" id="playBtn" disabled>Play</button>
       <button class="btn" id="newBtn" disabled>New World</button>
+    </div>
+    <div class="mp">
+      <h3 class="px">Multiplayer</h3>
+      <div class="mprow"><input id="mpName" maxlength="16" placeholder="Your name" aria-label="Your name"><input id="mpRoom" maxlength="24" placeholder="Server name" value="public" aria-label="Server name"></div>
+      <button class="btn primary" id="joinBtn" disabled>Join Server</button>
+      <div id="rooms"><p class="hint">Looking for servers...</p></div>
     </div>
     <div class="keys" id="keys1"></div>
   </div>
@@ -441,7 +463,7 @@ function queueAll(){ const a=Math.floor(spawn.x/CS),b=Math.floor(spawn.z/CS); qu
   queue.sort((p,q)=>q[2]-p[2]); }
 function flushDirty(){ for(const k of dirty) buildChunk(k%NCX,Math.floor(k/NCX)); dirty.clear(); }
 const edits=new Map();
-function setBlock(x,y,z,b){ const i=idx(x,y,z); world[i]=b; edits.set(i,b);
+function setBlock(x,y,z,b,remote){ const i=idx(x,y,z); world[i]=b; edits.set(i,b); if(mp.on&&!remote) netQueue.push(i,b);
   const cx=Math.floor(x/CS),cz=Math.floor(z/CS);
   const mark=(a,c)=>{ if(a>=0&&a<NCX&&c>=0&&c<NCZ) dirty.add(a+c*NCX); };
   mark(cx,cz); const lx=x-cx*CS,lz=z-cz*CS;
@@ -601,7 +623,8 @@ function setState(s){ state=s;
   $('pause').classList.toggle('off',s!=='pause');
   $('death').classList.toggle('off',s!=='dead');
   $('inv').classList.toggle('off',s!=='inv');
-  if(s!=='play'){ mouseL=mouseR=false; keys={}; tState.jump=tState.mine=tState.place=false; document.querySelectorAll('[data-hold]').forEach(b=>b.classList.remove('on')); look.id=null; joyEnd({pointerId:joy.id}); }
+  $('bChat').classList.toggle('off',!mp.on);
+  if(s!=='play'){ if(chatting) closeChat(); mouseL=mouseR=false; keys={}; tState.jump=tState.mine=tState.place=false; document.querySelectorAll('[data-hold]').forEach(b=>b.classList.remove('on')); look.id=null; joyEnd({pointerId:joy.id}); }
 }
 function requestLock(){ if(isTouch||lockFailed) return; try{ const p=cv.requestPointerLock(); if(p&&p.catch) p.catch(()=>onLockError()); }catch(e){ onLockError(); } }
 function onLockError(){ if(!everLocked) lockFailed=true; else if(state==='play') pauseGame(); }
@@ -613,10 +636,10 @@ function openInv(){ if(state!=='play') return; computeStations(); cursor=null; s
 function closeInv(){ cursor=null; resume(); }
 function toggleView(){ view=view?0:1; }
 $('resumeBtn').onclick=resume;
-$('quitBtn').onclick=()=>{ save(); setState('menu'); $('playBtn').textContent='Continue'; };
+$('quitBtn').onclick=()=>{ save(); if(mp.on) leaveRoom(); setState('menu'); $('playBtn').textContent='Continue'; };
 $('closeInv').onclick=closeInv;
 $('respawnBtn').onclick=()=>{ spawn.y=topY(Math.floor(spawn.x),Math.floor(spawn.z)); resetPlayer(); renderHearts(); resume(); };
-$('playBtn').onclick=()=>{ resume(); if(!inv.some(Boolean)) toast('Hold MINE on a tree to get logs',3500); };
+$('playBtn').onclick=()=>{ if(worldKey!=='sp') loadSP(); resume(); if(!inv.some(Boolean)) toast('Hold MINE on a tree to get logs',3500); };
 let newArm=0;
 $('newBtn').onclick=()=>{ const b=$('newBtn'); if(Date.now()-newArm>3000){ newArm=Date.now(); b.textContent='Click again to confirm'; setTimeout(()=>b.textContent='New World',3000); return; }
   newArm=0; b.textContent='New World'; newWorld(); resume(); toast('Hold MINE on a tree to get logs',3500); };
@@ -630,6 +653,7 @@ addEventListener('keydown',e=>{
     else if(e.code==='KeyI'||e.code==='Tab') openInv();
     else if(e.code==='KeyV') toggleView();
     else if(e.code==='KeyQ') dropSelected();
+    else if((e.code==='KeyT'||e.code==='Enter')&&mp.on){ e.preventDefault(); openChat(); }
     else if(e.code==='Escape') pauseGame();
   } else if(state==='inv'){ if(e.code==='KeyI'||e.code==='Tab'||e.code==='Escape') closeInv(); }
   else if(state==='pause'&&e.code==='Escape'&&lockFailed) resume();
@@ -664,6 +688,7 @@ document.querySelectorAll('[data-toggle]').forEach(b=>{ const k=b.dataset.toggle
 $('bInv').addEventListener('pointerdown',e=>{ e.preventDefault(); openInv(); });
 $('bView').addEventListener('pointerdown',e=>{ e.preventDefault(); toggleView(); });
 $('bPause').addEventListener('pointerdown',e=>{ e.preventDefault(); pauseGame(); });
+$('bChat').addEventListener('pointerdown',e=>{ e.preventDefault(); chatting?closeChat():openChat(); });
 
 /* ================= ENTITIES ================= */
 function spawnDrop(id,n,x,y,z,vx=0,vy=3,vz=0,age=0){
@@ -719,12 +744,15 @@ function hurt(n,kx=0,kz=0){ if(P.dead||P.hurtT>0||n<=0) return;
   flash(); renderHearts(); if(P.health<=0) die(); }
 function die(){ P.dead=true; P.health=0; renderHearts();
   for(let i=0;i<36;i++){ const s=inv[i]; if(s){ spawnDrop(s.id,s.n,P.pos.x,P.pos.y+1,P.pos.z,(R()-.5)*5,4,(R()-.5)*5); inv[i]=null; } }
-  invChanged(); setState('dead'); if(document.pointerLockElement) document.exitPointerLock(); save(); }
+  invChanged(); setState('dead'); if(document.pointerLockElement) document.exitPointerLock(); save();
+  if(mp.on){ roomPub({t:'sys',m:mp.name+' died'}); sysChat(mp.name+' died'); } }
 
 /* ================= SAVE ================= */
 const SKEY='nuggetcraft-save-v1';
-function save(){ try{ localStorage.setItem(SKEY,JSON.stringify({seed,edits:[...edits],inv,sel,pos:[P.pos.x,P.pos.y,P.pos.z],yaw:P.yaw,pitch:P.pitch,time,health:P.dead?20:P.health,spawn,dead:P.dead})); }catch(e){} }
-function loadSave(){ try{ return JSON.parse(localStorage.getItem(SKEY)); }catch(e){ return null; } }
+let worldKey='sp';
+const saveKey=()=>worldKey==='sp'?SKEY:'nuggetcraft-mp-'+worldKey.slice(3);
+function save(){ try{ localStorage.setItem(saveKey(),JSON.stringify({seed,edits:[...edits],inv,sel,pos:[P.pos.x,P.pos.y,P.pos.z],yaw:P.yaw,pitch:P.pitch,time,health:P.dead?20:P.health,spawn,dead:P.dead})); }catch(e){} }
+function loadSave(){ try{ return JSON.parse(localStorage.getItem(saveKey())); }catch(e){ return null; } }
 function applySave(s){
   if(Array.isArray(s.edits)) for(const [i,b] of s.edits){ world[i]=b; edits.set(i,b); }
   if(s.spawn) spawn=s.spawn;
@@ -732,10 +760,17 @@ function applySave(s){
   sel=s.sel|0; time=typeof s.time==='number'?s.time:.08; P.health=s.health||20;
   if(s.pos&&!s.dead){ P.pos.set(s.pos[0],s.pos[1],s.pos[2]); P.yaw=s.yaw||0; P.pitch=s.pitch||0; P.fallMax=P.pos.y; }
 }
-function newWorld(){ try{ localStorage.removeItem(SKEY); }catch(e){}
+function clearWorldEntities(){ while(zombies.length) removeZombie(0); while(drops.length) removeDrop(0);
+  for(const e of tnts.values()){ scene.remove(e.m); e.m.material.dispose(); } tnts.clear();
+  for(const b of booms){ scene.remove(b.m); b.m.material.dispose(); } booms.length=0; resetBreak(); }
+function newWorld(){ if(mp.on) leaveRoom(); worldKey='sp'; try{ localStorage.removeItem(SKEY); }catch(e){}
   edits.clear(); generate((R()*1e9)|0); spawn=findSpawn(); resetPlayer(); inv=new Array(36).fill(null); sel=0; time=.08;
-  while(zombies.length) removeZombie(0); while(drops.length) removeDrop(0);
-  queueAll(); renderHotbar(); renderHearts(); }
+  clearWorldEntities(); queueAll(); renderHotbar(); renderHearts(); }
+function loadSP(){ worldKey='sp'; clearWorldEntities(); edits.clear(); inv=new Array(36).fill(null); sel=0; time=.08;
+  const s=loadSave();
+  if(s&&s.seed!=null){ generate(s.seed); spawn=findSpawn(); resetPlayer(); applySave(s); }
+  else { generate((R()*1e9)|0); spawn=findSpawn(); resetPlayer(); }
+  queueAll(); renderHotbar(); renderHearts(); return !!(s&&s.seed!=null); }
 addEventListener('visibilitychange',()=>{ if(document.hidden&&state!=='loading'&&state!=='menu') save(); });
 addEventListener('beforeunload',()=>{ if(state!=='loading') save(); });
 
@@ -758,6 +793,166 @@ function updateSky(dt){
   for(const c of clouds.children){ c.position.x+=dt*1.2; if(c.position.x>W+120) c.position.x=-120; }
   const night=sunH<-.05; if(night&&!wasNight&&state==='play') toast('Night is falling. Zombies are coming!',3200); wasNight=night;
 }
+
+/* ================= MULTIPLAYER ================= */
+// Serverless: BroadcastChannel (same browser) + public MQTT brokers over WebSocket.
+const TOP='nuggetcraft/v1/';
+const BROKERS=['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt'];
+const mp={on:false,room:'',name:'',seed:0,id:Math.random().toString(36).slice(2,10),joined:0,synced:false,peers:new Map(),sendT:0,lobbyT:0,timeT:0,roomsT:0};
+const NET={bc:null,socks:[],subs:new Set(),seen:new Set(),seenQ:[],seq:0};
+let netQueue=[],netFlushT=0,syncParts=null,chatting=false;
+const lobby=new Map();
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cleanName=n=>String(n||'').replace(/[^\w \-]/g,'').trim().slice(0,16)||'Player';
+const sanitizeRoom=s=>String(s||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,24);
+function hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h|0; }
+
+function mqttConnect(url){
+  const enc=new TextEncoder(),dec=new TextDecoder();
+  const c={ok:false,ws:null,buf:new Uint8Array(0),ping:0};
+  const str=s=>{ const b=enc.encode(s),o=new Uint8Array(b.length+2); o[0]=b.length>>8; o[1]=b.length&255; o.set(b,2); return o; };
+  const pkt=(h,parts)=>{ const body=parts.reduce((a,p)=>a+p.length,0); const lb=[]; let n=body;
+    do{ let d=n%128; n=Math.floor(n/128); if(n>0) d|=128; lb.push(d); }while(n>0);
+    const o=new Uint8Array(1+lb.length+body); o[0]=h; o.set(lb,1); let off=1+lb.length; for(const p of parts){ o.set(p,off); off+=p.length; } return o; };
+  c.send=b=>{ if(c.ws&&c.ws.readyState===1) try{ c.ws.send(b); }catch(e){} };
+  c.sub=t=>c.send(pkt(0x82,[new Uint8Array([0,1]),str(t),new Uint8Array([0])]));
+  c.pub=(t,s)=>c.send(pkt(0x30,[str(t),enc.encode(s)]));
+  function parse(){ for(;;){ const b=c.buf; if(b.length<2) return; let mul=1,len=0,i=1,byte;
+    do{ if(i>=b.length) return; byte=b[i++]; len+=(byte&127)*mul; mul*=128; }while(byte&128);
+    if(b.length<i+len) return; const type=b[0]>>4,qos=(b[0]>>1)&3,body=b.slice(i,i+len); c.buf=b.slice(i+len);
+    if(type===2){ c.ok=true; for(const t of NET.subs) c.sub(t); clearInterval(c.ping); c.ping=setInterval(()=>c.send(new Uint8Array([0xC0,0])),30000); }
+    else if(type===3&&body.length>=2){ const tl=(body[0]<<8)|body[1]; let off=2+tl+(qos?2:0); netRecv(dec.decode(body.subarray(2,2+tl)),dec.decode(body.subarray(off))); } } }
+  function open(){ try{ c.ws=new WebSocket(url,'mqtt'); }catch(e){ setTimeout(open,8000); return; }
+    c.ws.binaryType='arraybuffer';
+    c.ws.onopen=()=>{ c.buf=new Uint8Array(0); c.send(pkt(0x10,[str('MQTT'),new Uint8Array([4,2,0,60]),str('nc'+Math.random().toString(36).slice(2,12))])); };
+    c.ws.onmessage=e=>{ if(!(e.data instanceof ArrayBuffer)) return; const d=new Uint8Array(e.data),nb=new Uint8Array(c.buf.length+d.length); nb.set(c.buf); nb.set(d,c.buf.length); c.buf=nb; parse(); };
+    c.ws.onclose=()=>{ c.ok=false; clearInterval(c.ping); setTimeout(open,5000); };
+    c.ws.onerror=()=>{}; }
+  open(); return c;
+}
+function netStart(){
+  try{ NET.bc=new BroadcastChannel('nuggetcraft-net'); NET.bc.onmessage=e=>{ const d=e.data; if(d&&typeof d.topic==='string') netRecv(d.topic,d.str); }; }catch(e){}
+  for(const u of BROKERS) NET.socks.push(mqttConnect(u));
+  netSub(TOP+'lobby'); }
+function netSub(t){ if(NET.subs.has(t)) return; NET.subs.add(t); for(const c of NET.socks) if(c.ok) c.sub(t); }
+function netPub(topic,obj){ obj.id=mp.id; obj.s=++NET.seq; const s=JSON.stringify(obj);
+  try{ if(NET.bc) NET.bc.postMessage({topic,str:s}); }catch(e){} for(const c of NET.socks) if(c.ok) c.pub(topic,s); }
+function roomPub(obj){ if(!mp.on) return; obj.r=mp.room; netPub(TOP+'r/'+mp.room,obj); }
+function netRecv(topic,s){ let o; try{ o=JSON.parse(s); }catch(e){ return; }
+  if(!o||typeof o.id!=='string'||o.id===mp.id) return;
+  const k=o.id+':'+o.s; if(NET.seen.has(k)) return; NET.seen.add(k); NET.seenQ.push(k); if(NET.seenQ.length>4000) NET.seen.delete(NET.seenQ.shift());
+  if(topic===TOP+'lobby'){ if(o.t==='room'&&typeof o.r==='string'&&sanitizeRoom(o.r)===o.r&&o.r){ if(!lobby.has(o.r)) lobby.set(o.r,new Map()); lobby.get(o.r).set(o.id,performance.now()); } return; }
+  if(mp.on&&o.r===mp.room&&topic===TOP+'r/'+mp.room) onRoom(o); }
+
+function isHost(){ for(const [id,p] of mp.peers) if(p.j&&(p.j<mp.joined||(p.j===mp.joined&&id<mp.id))) return false; return true; }
+function onRoom(o){
+  let p=mp.peers.get(o.id);
+  if(!p&&(o.t==='p'||o.t==='hi')) p=addPeer(o.id,o.n);
+  if(p){ p.last=performance.now(); if(o.n&&cleanName(o.n)!==p.name) setPeerName(p,o.n); if(Number.isFinite(o.j)) p.j=o.j; }
+  switch(o.t){
+    case 'hi': if(o.first) sysChat(cleanName(o.n)+' joined'); if(isHost()) sendSync(o.id); sendPos(); break;
+    case 'p': if(p&&[o.x,o.y,o.z].every(Number.isFinite)){ p.tx=o.x; p.ty=o.y; p.tz=o.z; p.yaw=+o.yw||0; p.pitch=+o.pt||0; p.cr=!!o.cr; p.sw=!!o.sw; p.dead=!!o.d; } break;
+    case 'bs': if(Array.isArray(o.l)) for(let i=0;i+1<o.l.length;i+=2) applyNetBlock(o.l[i],o.l[i+1]); break;
+    case 'sync': if(o.to===mp.id) onSync(o); break;
+    case 'tnt': if(Number.isInteger(o.i)&&o.i>=0&&o.i<world.length&&world[o.i]===26) ignite(o.i%W,Math.floor(o.i/(W*D)),Math.floor(o.i/W)%D,99,true); break;
+    case 'boom': boomAt(+o.x,+o.y,+o.z); break;
+    case 'hit': if(o.to===mp.id) hurt(clamp(Math.round(+o.d)||1,1,10),clamp(+o.kx||0,-1,1),clamp(+o.kz||0,-1,1)); break;
+    case 'chat': if(typeof o.m==='string') addChat(p?p.name:cleanName(o.n),o.m.slice(0,120)); break;
+    case 'sys': if(typeof o.m==='string') sysChat(o.m.slice(0,120)); break;
+    case 'time': if(!isHost()&&Number.isFinite(o.v)) time=((o.v%1)+1)%1; break;
+    case 'bye': if(p){ sysChat(p.name+' left'); removePeer(o.id); } break;
+  }
+}
+function validBlock(i,b){ return Number.isInteger(i)&&i>=0&&i<world.length&&Number.isInteger(b)&&(b===0||(BLOCKS[b]&&b!==12)); }
+function applyNetBlock(i,b){ if(!validBlock(i,b)||world[i]===b) return; setBlock(i%W,Math.floor(i/(W*D)),Math.floor(i/W)%D,b,true); }
+function sendSync(to){ const flat=[]; for(const [i,b] of edits) flat.push(i,b); const CH=6000,n=Math.max(1,Math.ceil(flat.length/CH));
+  for(let k=0;k<n;k++) roomPub({t:'sync',to,k,n,e:flat.slice(k*CH,(k+1)*CH),tm:time}); }
+function onSync(o){ if(mp.synced||!Number.isInteger(o.n)||o.n<1||o.n>400) return;
+  if(!syncParts||syncParts.n!==o.n) syncParts={n:o.n,got:new Map()};
+  syncParts.got.set(o.k,Array.isArray(o.e)?o.e:[]); if(Number.isFinite(o.tm)) time=((o.tm%1)+1)%1;
+  if(syncParts.got.size<o.n) return;
+  generate(mp.seed); edits.clear();
+  for(let k=0;k<o.n;k++){ const e=syncParts.got.get(k)||[]; for(let j=0;j+1<e.length;j+=2) if(validBlock(e[j],e[j+1])){ world[e[j]]=e[j+1]; edits.set(e[j],e[j+1]); } }
+  mp.synced=true; syncParts=null; queueAll();
+  let g=0; while(g++<70&&collides(P.pos.x,P.pos.y,P.pos.z,P.hw,P.h)) P.pos.y+=1;
+  sysChat('World synced with the server'); }
+
+function nameTag(name){ const c=document.createElement('canvas'); c.width=256; c.height=64; const g=c.getContext('2d');
+  g.font='bold 30px system-ui,sans-serif'; const w=Math.min(250,g.measureText(name).width+24);
+  g.fillStyle='rgba(0,0,0,.5)'; g.fillRect(128-w/2,8,w,48); g.fillStyle='#fff'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(name,128,33);
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace;
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,depthWrite:false})); s.scale.set(1.6,.4,1); s.position.y=2.15; return s; }
+function addPeer(id,name){
+  const col=new THREE.Color().setHSL(((hashStr(id)>>>0)%360)/360,.65,.5).getHex();
+  const m=makeHumanoid(0xd9a066,col,0x2b2b4a,0xd9a066,0x3a2410); m.g.visible=false; scene.add(m.g);
+  const p={id,name:cleanName(name),m,tag:null,x:0,y:0,z:0,tx:0,ty:0,tz:0,yaw:0,cy:0,pitch:0,cr:false,sw:false,dead:false,j:0,last:performance.now(),phase:0,walk:0,swT:0,init:false};
+  p.tag=nameTag(p.name); m.g.add(p.tag); p.ty=-999; mp.peers.set(id,p); updateOnline(); return p; }
+function setPeerName(p,n){ p.name=cleanName(n); p.m.g.remove(p.tag); p.tag.material.map.dispose(); p.tag.material.dispose(); p.tag=nameTag(p.name); p.m.g.add(p.tag); }
+function removePeer(id){ const p=mp.peers.get(id); if(!p) return; scene.remove(p.m.g); for(const m of p.m.mats) m.dispose(); p.tag.material.map.dispose(); p.tag.material.dispose(); mp.peers.delete(id); updateOnline(); }
+function updatePeers(dt){ const now=performance.now();
+  for(const [id,p] of mp.peers){
+    if(now-p.last>9000){ removePeer(id); continue; }
+    if(p.ty<-500){ p.m.g.visible=false; continue; }
+    if(!p.init){ p.x=p.tx; p.y=p.ty; p.z=p.tz; p.cy=p.yaw; p.init=true; }
+    const k=Math.min(1,dt*12),ox=p.x,oz=p.z;
+    p.x+=(p.tx-p.x)*k; p.y+=(p.ty-p.y)*k; p.z+=(p.tz-p.z)*k;
+    const sp=Math.hypot(p.x-ox,p.z-oz)/Math.max(dt,1e-3);
+    p.phase+=sp*dt*2.2; p.walk+=(Math.min(1.25,sp/4.3)-p.walk)*k;
+    let dy=p.yaw-p.cy; dy=Math.atan2(Math.sin(dy),Math.cos(dy)); p.cy+=dy*k;
+    p.m.g.position.set(p.x,p.y-(p.cr?.15:0),p.z); p.m.g.rotation.y=p.cy; p.m.head.rotation.x=p.pitch*.7; p.m.body.rotation.x=p.cr?-.35:0;
+    p.swT=p.sw?p.swT+dt*3.5:0;
+    animate(p.m,p.phase,p.walk,p.sw?Math.abs(Math.sin(p.swT*Math.PI)):0,false);
+    p.m.g.visible=!p.dead; }
+}
+function hitPeer(p){ const it=ITEMS[heldId()],dx=p.x-P.pos.x,dz=p.z-P.pos.z,d=Math.hypot(dx,dz)||1;
+  roomPub({t:'hit',to:p.id,d:(it&&it.dmg)||1,kx:dx/d,kz:dz/d}); }
+function sendPos(){ roomPub({t:'p',n:mp.name,j:mp.joined,x:+P.pos.x.toFixed(2),y:+P.pos.y.toFixed(2),z:+P.pos.z.toFixed(2),yw:+P.yaw.toFixed(2),pt:+P.pitch.toFixed(2),cr:P.crouch?1:0,sw:(P.swingT>0||P.once>0)?1:0,d:P.dead?1:0}); }
+function updateOnline(){ $('online').classList.toggle('off',!mp.on); $('online').textContent=`${mp.room} · ${mp.peers.size+1} online`; }
+function chatLine(html){ const log=$('chatlog'),d=document.createElement('div'); d.innerHTML=html; log.appendChild(d);
+  while(log.children.length>9) log.firstChild.remove(); setTimeout(()=>d.classList.add('old'),10000); }
+function addChat(name,m){ chatLine(`<b>${esc(name)}:</b> ${esc(m)}`); }
+function sysChat(m){ chatLine(`<span class="sys">${esc(m)}</span>`); }
+function openChat(){ if(!mp.on||state!=='play') return; chatting=true; keys={}; const i=$('chatIn'); i.classList.remove('off'); $('chat').classList.add('typing'); i.value=''; i.focus(); }
+function closeChat(){ chatting=false; const i=$('chatIn'); i.blur(); i.classList.add('off'); $('chat').classList.remove('typing'); }
+$('chatIn').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ const m=$('chatIn').value.trim().slice(0,120); if(m){ roomPub({t:'chat',n:mp.name,m}); addChat(mp.name,m); } closeChat(); } else if(e.key==='Escape') closeChat(); });
+
+function joinRoom(room,name){
+  room=sanitizeRoom(room)||'public'; name=cleanName(name);
+  try{ localStorage.setItem('nuggetcraft-name',name); }catch(e){}
+  if(mp.on) leaveRoom(); else if(worldKey==='sp'&&state!=='loading') save();
+  mp.on=true; mp.room=room; mp.name=name; mp.joined=Date.now(); mp.synced=false; mp.seed=hashStr('room:'+room); syncParts=null;
+  worldKey='mp:'+room; clearWorldEntities(); edits.clear();
+  generate(mp.seed); spawn=findSpawn(); resetPlayer(); inv=new Array(36).fill(null); sel=0; time=.08;
+  const s=loadSave(); if(s) applySave(s);
+  queueAll(); renderHotbar(); renderHearts();
+  netSub(TOP+'r/'+room);
+  roomPub({t:'hi',n:name,j:mp.joined,first:1});
+  for(const ms of [1500,4000,8000]) setTimeout(()=>{ if(mp.on&&mp.room===room&&!mp.synced) roomPub({t:'hi',n:name,j:mp.joined}); },ms);
+  $('chat').classList.remove('off'); $('chatlog').innerHTML=''; updateOnline(); sysChat(`Joined server "${room}". Press T to chat.`);
+  $('playBtn').textContent='Play'; resume(); }
+function leaveRoom(){ if(!mp.on) return; roomPub({t:'bye'}); save(); mp.on=false;
+  for(const id of [...mp.peers.keys()]) removePeer(id); netQueue=[];
+  $('chat').classList.add('off'); updateOnline(); }
+function renderRooms(){ const now=performance.now(),list=[];
+  for(const [r,m] of lobby){ for(const [id,t] of m) if(now-t>13000) m.delete(id); if(m.size) list.push([r,m.size]); }
+  list.sort((a,b)=>b[1]-a[1]);
+  $('rooms').innerHTML=list.length?list.slice(0,8).map(([r,n])=>`<button class="room" data-room="${esc(r)}">${esc(r)}<span>${n} online</span></button>`).join('')
+    :'<p class="hint">No open servers right now. Type a server name and join to start one. Friends join by typing the same name.</p>'; }
+$('rooms').addEventListener('click',e=>{ const b=e.target.closest('[data-room]'); if(!b||$('joinBtn').disabled) return; $('mpRoom').value=b.dataset.room; joinRoom(b.dataset.room,$('mpName').value); });
+$('joinBtn').onclick=()=>joinRoom($('mpRoom').value,$('mpName').value);
+{ let n=''; try{ n=localStorage.getItem('nuggetcraft-name')||''; }catch(e){} $('mpName').value=n||('Player'+((R()*900+100)|0)); }
+function netTick(dt){
+  if(mp.on){
+    mp.sendT+=dt; if(mp.sendT>=.1){ mp.sendT=0; sendPos(); }
+    netFlushT+=dt; if(netFlushT>=.1&&netQueue.length){ netFlushT=0; for(let i=0;i<netQueue.length;i+=4000) roomPub({t:'bs',l:netQueue.slice(i,i+4000)}); netQueue=[]; }
+    mp.lobbyT-=dt; if(mp.lobbyT<=0){ mp.lobbyT=4; netPub(TOP+'lobby',{t:'room',r:mp.room}); }
+    mp.timeT-=dt; if(mp.timeT<=0){ mp.timeT=5; if(isHost()) roomPub({t:'time',v:time}); }
+    updatePeers(dt);
+  }
+  if(state==='menu'){ mp.roomsT-=dt; if(mp.roomsT<=0){ mp.roomsT=2; renderRooms(); } }
+}
+netStart();
+addEventListener('beforeunload',()=>{ if(mp.on) roomPub({t:'bye'}); });
 
 /* ================= MAIN UPDATE ================= */
 const eye=new THREE.Vector3(),_dir=new THREE.Vector3();
@@ -808,12 +1003,14 @@ function update(dt){
   let zt=null,ztd=target?target.t:5.5;
   const o=[eye.x,eye.y,eye.z],dv=[dir.x,dir.y,dir.z];
   for(const z of zombies){ const t=rayBox(o,dv,[z.pos.x-.38,z.pos.y,z.pos.z-.38],[z.pos.x+.38,z.pos.y+1.9,z.pos.z+.38]); if(t!==null&&t<ztd){ ztd=t; zt=z; } }
-  if(target&&!zt){ outline.visible=true; outline.position.set(target.x+.5,target.y+.5,target.z+.5); } else outline.visible=false;
+  let pt=null;
+  if(mp.on) for(const p of mp.peers.values()){ if(p.dead||!p.init) continue; const t=rayBox(o,dv,[p.x-.38,p.y,p.z-.38],[p.x+.38,p.y+1.9,p.z+.38]); if(t!==null&&t<ztd){ ztd=t; pt=p; zt=null; } }
+  if(target&&!zt&&!pt){ outline.visible=true; outline.position.set(target.x+.5,target.y+.5,target.z+.5); } else outline.visible=false;
   // mine / attack
   const breakHeld=(mouseL||keys.KeyF||tState.mine)&&!P.dead;
   atkCD-=dt; breakDelay-=dt; let mining=false;
   if(breakHeld){
-    if(zt){ resetBreak(); if(atkCD<=0){ attack(zt); atkCD=.4; P.once=1; } }
+    if(zt||pt){ resetBreak(); if(atkCD<=0){ if(zt) attack(zt); else hitPeer(pt); atkCD=.4; P.once=1; } }
     else if(target&&breakDelay<=0){
       mining=true;
       const key=idx(target.x,target.y,target.z); if(key!==breakKey){ breakKey=key; breakT=0; }
@@ -849,9 +1046,9 @@ function update(dt){
 }
 const tnts=new Map(),booms=[];
 const tntGeo=new THREE.BoxGeometry(1.02,1.02,1.02),boomGeo=new THREE.SphereGeometry(1,16,12);
-function ignite(x,y,z,t){ const k=idx(x,y,z); if(tnts.has(k)) return;
+function ignite(x,y,z,t,remote){ const k=idx(x,y,z); if(tnts.has(k)) return;
   const m=new THREE.Mesh(tntGeo,new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false}));
-  m.position.set(x+.5,y+.5,z+.5); scene.add(m); tnts.set(k,{x,y,z,t,m}); }
+  m.position.set(x+.5,y+.5,z+.5); scene.add(m); tnts.set(k,{x,y,z,t,m,remote}); if(!remote) roomPub({t:'tnt',i:k}); }
 function explode(cx,cy,cz){
   for(let y=cy-3;y<=cy+3;y++) for(let z=cz-3;z<=cz+3;z++) for(let x=cx-3;x<=cx+3;x++){
     if(!inB(x,y,z)||Math.hypot(x-cx,y-cy,z-cz)>3.3-R()*.6) continue;
@@ -859,7 +1056,9 @@ function explode(cx,cy,cz){
     if(b===26&&!(x===cx&&y===cy&&z===cz)){ ignite(x,y,z,.4+R()*.4); continue; }
     setBlock(x,y,z,0);
     if(b!==26&&R()<.3){ const dr=dropFor(b,116); if(dr) spawnDrop(dr,1,x+.5,y+.5,z+.5,(R()-.5)*6,4+R()*3,(R()-.5)*6); } }
-  const ox=cx+.5,oy=cy+.5,oz=cz+.5;
+  boomAt(cx+.5,cy+.5,cz+.5); roomPub({t:'boom',x:cx+.5,y:cy+.5,z:cz+.5});
+}
+function boomAt(ox,oy,oz){ if(![ox,oy,oz].every(Number.isFinite)) return;
   { const dx=P.pos.x-ox,dz=P.pos.z-oz,d=Math.hypot(dx,P.pos.y+.9-oy,dz)||1; if(d<7){ P.hurtT=0; hurt(Math.ceil((7-d)*3),dx/d,dz/d); } }
   for(const zb of zombies){ const dx=zb.pos.x-ox,dz=zb.pos.z-oz,d=Math.hypot(dx,zb.pos.y+.9-oy,dz)||1; if(d<7){ zb.hp-=(7-d)*6; zb.hit=.3; zb.vel.set(dx/d*9,7,dz/d*9); zb.kb=.5; } }
   const m=new THREE.Mesh(boomGeo,new THREE.MeshBasicMaterial({color:0xffb347,transparent:true,opacity:.8,depthWrite:false}));
@@ -869,7 +1068,7 @@ function updateTNT(dt){
   for(const [k,e] of tnts){ e.t-=dt;
     if(world[k]!==26){ scene.remove(e.m); e.m.material.dispose(); tnts.delete(k); continue; }
     e.m.material.opacity=(Math.floor(e.t*6)%2)?.65:0;
-    if(e.t<=0){ scene.remove(e.m); e.m.material.dispose(); tnts.delete(k); explode(e.x,e.y,e.z); } }
+    if(e.t<=0&&!e.remote){ scene.remove(e.m); e.m.material.dispose(); tnts.delete(k); explode(e.x,e.y,e.z); } }
   for(let i=booms.length-1;i>=0;i--){ const b=booms[i]; b.t-=dt; const k=1-b.t/.5; b.m.scale.setScalar(1+k*5); b.m.material.opacity=Math.max(0,b.t/.5*.8);
     if(b.t<=0){ scene.remove(b.m); b.m.material.dispose(); booms.splice(i,1); } }
 }
@@ -899,6 +1098,7 @@ function frame(now){
   if(state==='play') update(dt); else if(state==='menu'||state==='loading') menuCam(dt);
   else if(state==='dead'){ updateZombies(dt); updateDrops(dt); }
   updateSky(state==='play'?dt:0);
+  netTick(dt);
   flushDirty();
   renderer.render(scene,camera);
 }
@@ -907,11 +1107,8 @@ function frame(now){
 setState('loading'); renderHearts();
 requestAnimationFrame(frame);
 setTimeout(()=>{
-  const s=loadSave();
-  if(s&&s.seed!=null){ generate(s.seed); spawn=findSpawn(); resetPlayer(); applySave(s); $('playBtn').textContent='Continue'; }
-  else { generate((R()*1e9)|0); spawn=findSpawn(); resetPlayer(); }
-  queueAll(); renderHotbar(); renderHearts();
-  $('loading').classList.add('off'); $('playBtn').disabled=false; $('newBtn').disabled=false;
+  if(loadSP()) $('playBtn').textContent='Continue';
+  $('loading').classList.add('off'); $('playBtn').disabled=false; $('newBtn').disabled=false; $('joinBtn').disabled=false;
   setState('menu');
 },60);
 </script>
