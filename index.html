@@ -1152,6 +1152,7 @@ function spawnZombie(x,z,kind){ const y=topY(x,z); if(y<2||getB(x,y-1,z)===6||ge
 function removeZombie(i){ const z=zombies[i]; scene.remove(z.m.g); for(const m of z.m.mats) m.dispose(); zombies.splice(i,1); }
 function mobDrops(z){ const at=(id,n)=>{ if(n>0) spawnDrop(id,n,z.pos.x,z.pos.y+.8,z.pos.z,(R()-.5)*2,3,(R()-.5)*2); };
   if(z.kind==='zombie'){ if(R()<.3) at(101,1); } else if(z.kind==='skeleton'){ at(152,R()*3|0); at(156,R()*3|0); } else if(z.kind==='creeper') at(154,R()*3|0); else at(151,R()*3|0); }
+const touchingCactus=e=>{ const w=e.hw+.06; for(const [ox,oz] of [[-w,0],[w,0],[0,-w],[0,w]]) for(const oy of [.1,e.h*.6]) if(getB(Math.floor(e.pos.x+ox),Math.floor(e.pos.y+oy),Math.floor(e.pos.z+oz))===39) return true; return false; };
 const skyOpen=z=>topY(Math.floor(z.pos.x),Math.floor(z.pos.z))<=z.pos.y+1.9;
 function canSee(z){ const ox=z.pos.x,oy=z.pos.y+1.5,oz=z.pos.z,tx=P.pos.x-ox,ty=P.pos.y+1.5-oy,tz=P.pos.z-oz,d=Math.hypot(tx,ty,tz)||1; const h=raycast(ox,oy,oz,tx/d,ty/d,tz/d,d); return !h||h.t>=d-.3; }
 function creeperBoom(z){ const x=Math.floor(z.pos.x),y=Math.floor(z.pos.y+.5),zz=Math.floor(z.pos.z); if(modOn('notnt')) boomAt(x+.5,y+.5,zz+.5); else explode(x,y,zz); }
@@ -1169,6 +1170,7 @@ function updateZombies(dt){
     z.vel.x+=(tx-z.vel.x)*k; z.vel.z+=(tz-z.vel.z)*k; z.vel.y=Math.max(z.vel.y-28*dt,-40);
     if(z.jump&&z.onGround) z.vel.y=8.2;
     const r=moveEntity(z,dt); z.jump=(r.hx||r.hz)&&chase;
+    z.cactT=(z.cactT||0)-dt; if(z.cactT<=0&&touchingCactus(z)){ z.cactT=.5; z.hp-=1; z.hit=.25; }
     z.atk-=dt;
     if(chase){
       if(z.kind==='creeper'){ if(dist<2.8&&Math.abs(dy)<2){ if(z.fuse===0) playTone(220,.6,'sawtooth',.05); z.fuse+=dt; if(z.fuse>1.5){ creeperBoom(z); removeZombie(i); continue; } } else z.fuse=Math.max(0,z.fuse-dt); }
@@ -1699,7 +1701,7 @@ function updateFarm(dt){ farmT-=dt; if(farmT>0) return; farmT=1; if(!authority()
     else if(b===33){ if(R()<1/80){ setBlock(x,y,z,0); growTree(x,y,z); } } } }
 
 /* ================= ANIMALS ================= */
-const ANIMAL={cow:{hp:10,hw:.45,h:1.4,speed:1.5,food:133},pig:{hp:10,hw:.4,h:.9,speed:1.6,food:133},chicken:{hp:4,hw:.25,h:.7,speed:1.4,food:132}};
+const ANIMAL={cow:{hp:10,hw:.45,h:1.4,speed:1.5,food:133},pig:{hp:10,hw:.4,h:.9,speed:1.6,food:133},chicken:{hp:4,hw:.25,h:.7,speed:1.4,food:132},sheep:{hp:8,hw:.4,h:1.25,speed:1.4,food:133}};
 const animals=[]; let animT=1,aimAnimal=null;
 function makeAnimalModel(type){
   const g=new THREE.Group(),mats=[],legs=[],wings=[];
@@ -1716,6 +1718,10 @@ function makeAnimalModel(type){
     box(.75,.6,1.05,pk,0,.66,0); head.position.set(0,.78,-.55); box(.55,.5,.5,pk,0,0,-.18,head); box(.28,.18,.08,sn,0,-.06,-.47,head);
     box(.07,.07,.02,dk,-.15,.1,-.435,head); box(.07,.07,.02,dk,.15,.1,-.435,head);
     for(const [x,z] of [[-.22,-.35],[.22,-.35],[-.22,.35],[.22,.35]]) leg(.22,.38,pk,x,.38,z); }
+  else if(type==='sheep'){ const wl=mat(0xf0efe8),gy=mat(0x9c9890);
+    box(.82,.72,1.12,wl,0,.86,0); head.position.set(0,1.05,-.6); box(.42,.42,.46,gy,0,0,-.08,head); box(.46,.2,.3,wl,0,.18,.05,head);
+    box(.07,.07,.02,dk,-.12,.06,-.315,head); box(.07,.07,.02,dk,.12,.06,-.315,head);
+    for(const [x,z] of [[-.25,-.38],[.25,-.38],[-.25,.38],[.25,.38]]) leg(.2,.52,gy,x,.52,z); }
   else { const wh=mat(0xf7f7f2),ye=mat(0xe8b23a),rd=mat(0xd02020);
     box(.4,.4,.5,wh,0,.5,0); head.position.set(0,.78,-.22); box(.25,.32,.22,wh,0,.04,-.02,head); box(.12,.08,.1,ye,0,0,-.17,head); box(.08,.1,.05,rd,0,-.1,-.14,head);
     box(.05,.05,.02,dk,-.08,.1,-.135,head); box(.05,.05,.02,dk,.08,.1,-.135,head);
@@ -1727,7 +1733,7 @@ function spawnAnimal(type,x,y,z,baby){ const m=makeAnimalModel(type); scene.add(
   animals.push({type,m,pos:new THREE.Vector3(x,y,z),vel:new THREE.Vector3(),hw:d.hw*(baby?.55:1),h:d.h*(baby?.55:1),onGround:false,hp:d.hp,hit:0,flee:0,love:0,cd:baby?60:0,baby,age:0,think:0,tx:0,tz:0,yaw:R()*6.28,phase:0,egg:60+R()*90,jump:false}); }
 function removeAnimal(i){ const a=animals[i]; scene.remove(a.m.g); for(const m of a.m.mats) m.dispose(); animals.splice(i,1); }
 function animalDrops(a){ if(a.baby) return; const at=(id,n)=>{ if(n>0) spawnDrop(id,n,a.pos.x,a.pos.y+.5,a.pos.z,(R()-.5)*2,3,(R()-.5)*2); };
-  if(a.type==='cow'){ at(135,1+(R()*3|0)); at(142,R()*3|0); } else if(a.type==='pig') at(137,1+(R()*3|0)); else { at(139,1); at(143,R()*3|0); } }
+  if(a.type==='cow'){ at(135,1+(R()*3|0)); at(142,R()*3|0); } else if(a.type==='pig') at(137,1+(R()*3|0)); else if(a.type==='sheep') at(73,1+(R()*2|0)); else { at(139,1); at(143,R()*3|0); } }
 function attackAnimal(a){ const it=ITEMS[heldId()]; a.hp-=(it&&it.dmg)||1; a.hit=.3; a.flee=4;
   const dx=a.pos.x-P.pos.x,dz=a.pos.z-P.pos.z,d=Math.hypot(dx,dz)||1; a.vel.x=dx/d*6; a.vel.z=dz/d*6; a.vel.y=4.5; }
 function feedAnimal(a){ const s=inv[sel],d=ANIMAL[a.type]; if(!s||s.id!==d.food) return false;
@@ -1737,7 +1743,7 @@ function updateAnimals(dt){
   animT-=dt;
   if(animT<=0){ animT=4; if(animals.length<12) for(let k=0;k<(animals.length<5?3:1);k++){
     const ang=R()*Math.PI*2,dd=20+R()*22,x=Math.floor(P.pos.x+Math.cos(ang)*dd),z=Math.floor(P.pos.z+Math.sin(ang)*dd),y=topY(x,z);
-    if(y>1&&getB(x,y-1,z)===1){ const r=R(),type=r<.38?'cow':r<.72?'pig':'chicken'; for(let c=0;c<1+(R()*3|0);c++) spawnAnimal(type,x+.5+(R()-.5)*2,y,z+.5+(R()-.5)*2,false); } } }
+    if(y>1&&getB(x,y-1,z)===1){ const r=R(),type=r<.3?'cow':r<.56?'pig':r<.78?'chicken':'sheep'; for(let c=0;c<1+(R()*3|0);c++) spawnAnimal(type,x+.5+(R()-.5)*2,y,z+.5+(R()-.5)*2,false); } } }
   for(let i=animals.length-1;i>=0;i--){ const a=animals[i],d=ANIMAL[a.type];
     const dx=P.pos.x-a.pos.x,dz=P.pos.z-a.pos.z,dist=Math.hypot(dx,dz)||1;
     if(a.hp<=0){ animalDrops(a); removeAnimal(i); continue; }
@@ -1754,6 +1760,7 @@ function updateAnimals(dt){
     const k=Math.min(1,6*dt); a.vel.x+=(mx*sp-a.vel.x)*k; a.vel.z+=(mz*sp-a.vel.z)*k; a.vel.y=Math.max(a.vel.y-28*dt,-40);
     if(a.jump&&a.onGround) a.vel.y=7.5;
     const r=moveEntity(a,dt); a.jump=(r.hx||r.hz)&&(Math.abs(mx)+Math.abs(mz)>.1);
+    a.cactT=(a.cactT||0)-dt; if(a.cactT<=0&&touchingCactus(a)){ a.cactT=.5; a.hp-=1; a.hit=.25; a.flee=2; }
     const hs=Math.hypot(a.vel.x,a.vel.z); if(hs>.2){ let want=Math.atan2(-a.vel.x,-a.vel.z),dy=Math.atan2(Math.sin(want-a.yaw),Math.cos(want-a.yaw)); a.yaw+=dy*Math.min(1,dt*8); }
     a.phase+=hs*dt*3.2;
     if(a.type==='chicken'&&!a.baby){ a.egg-=dt; if(a.egg<=0){ a.egg=60+R()*90; spawnDrop(141,1,a.pos.x,a.pos.y+.3,a.pos.z,0,1,0); } }
