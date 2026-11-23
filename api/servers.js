@@ -64,7 +64,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const q = req.query || {};
       if (q.badge) { const d = unpack(q.badge); return res.status(200).json(d && d.t === 'badge' ? { ok: true, username: d.u, pid: d.pid } : { ok: false }); }
-      if (q.world) { const ip = addr(q.world); const rows = await sql`SELECT data, updated_at FROM server_worlds WHERE ip = ${ip}`; return res.status(200).json(rows.length ? { e3: rows[0].data, updated_at: rows[0].updated_at } : { e3: null }); }
+      if (q.world) { const ip = addr(q.world); const rows = await sql`SELECT data, chests, updated_at FROM server_worlds WHERE ip = ${ip}`; return res.status(200).json(rows.length ? { e3: rows[0].data, ch: rows[0].chests, updated_at: rows[0].updated_at } : { e3: null }); }
       if (q.cmd) { const d = unpack(q.cmd); return res.status(200).json(d && d.t === 'cmd' ? { ok: true, username: d.u, cmd: d.cmd, n: d.n } : { ok: false }); }
       const ip = addr(q.ip);
       if (ip) {
@@ -170,7 +170,8 @@ export default async function handler(req, res) {
       }
       const data = typeof b.e3 === 'string' ? b.e3 : '';
       if (data.length > 3500000 || !/^[A-Za-z0-9+/=]*$/.test(data)) return res.status(413).json({ error: 'World is too big to save online' });
-      await sql`INSERT INTO server_worlds (ip, data, updated_at) VALUES (${ip}, ${data}, now()) ON CONFLICT (ip) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`;
+      const ch = typeof b.ch === 'string' && b.ch.length < 500000 ? b.ch : '[]';
+      await sql`INSERT INTO server_worlds (ip, data, chests, updated_at) VALUES (${ip}, ${data}, ${ch}, now()) ON CONFLICT (ip) DO UPDATE SET data = EXCLUDED.data, chests = EXCLUDED.chests, updated_at = now()`;
       return res.status(200).json({ ok: true });
     }
 
