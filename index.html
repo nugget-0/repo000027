@@ -1049,7 +1049,7 @@ async function onNugget(user){ naUser=user||null; isAdminUser=false;
   if(user){ const n=cleanName(user.username); $('mpName').value=n; try{ localStorage.setItem('nuggetcraft-name',n); }catch(e){}
     try{ const j=await api('POST',{action:'whoami'},'',nauth.token); if(naUser!==user) return; isAdminUser=!!j.admin; if(isAdminUser) $('naWho').textContent='Signed in as '+user.username+' · Admin (you can pin servers)'; }catch(e){} }
   renderServers(); }
-loadNuggetAuth().then(NA=>{ nauth=NA.init({clientId:NA_CLIENT,mode:'popup'}); nauth.renderButton('#nugget-button'); nauth.onChange(onNugget); })
+loadNuggetAuth().then(NA=>{ nauth=NA.init({clientId:NA_CLIENT,mode:/; wv\)/.test(navigator.userAgent)?'redirect':'popup'});   // popups never report back inside Android WebViews (Phantom Browser) nauth.renderButton('#nugget-button'); nauth.onChange(onNugget); })
   .catch(()=>{ $('naWho').textContent='Sign in with Nugget only works on the hosted site.'; });
 $('naOut').onclick=()=>{ if(nauth) nauth.signOut(); };
 function netTick(dt){
