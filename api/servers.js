@@ -2,6 +2,7 @@
 // GET  /api/servers          -> { url, sealed, servers }  sealed = Neon Realtime live query of public servers
 // GET  /api/servers?ip=X     -> { server }                look up one online server by IP (public or private)
 // POST /api/servers {action:'create'|'beat'|'close', ...}
+// POST /api/servers {action:'whoami'|'pin'|'unpin', ip}  with "Authorization: Bearer <NuggetAuth token>" (pin/unpin: admins only)
 import { neon } from '@neondatabase/serverless';
 import { createRealtime, rawSql } from '@neon/realtime/server';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
@@ -9,18 +10,33 @@ import { createHash, randomBytes, randomInt } from 'node:crypto';
 const sql = neon(process.env.DATABASE_URL);
 const realtime = createRealtime({ secret: process.env.NEON_REALTIME_SECRET, db: 'neondb' });
 
-const LIST_SQL = 'SELECT ip, name, motd, host_name, players, max_players, last_seen FROM servers WHERE is_public = true ORDER BY players DESC, ip LIMIT 60';
+const LIST_SQL = 'SELECT s.ip, s.name, s.motd, s.host_name, s.players, s.max_players, s.last_seen, (p.ip IS NOT NULL) AS pinned FROM servers s LEFT JOIN pins p ON p.ip = s.ip WHERE s.is_public = true ORDER BY (p.ip IS NOT NULL) DESC, s.players DESC, s.ip LIMIT 60';
+const NUGGETAUTH = 'https://nuggetauth.vercel.app';
+const ADMINS = (process.env.NUGGETCRAFT_ADMINS || 'nugget').toLowerCase().split(',').map(x => x.trim()).filter(Boolean);
 const MAX_SERVERS = 300;
 const IP_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 
 const hash = t => createHash('sha256').update(String(t)).digest('hex');
 const clean = (v, n) => String(v ?? '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, n);
 const int = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : d; };
+// Who is signed in with Nugget (checked with NuggetAuth itself, never trusted from the browser).
+async function nuggetUser(req) {
+  const h = req.headers.authorization || '';
+  const token = h.startsWith('Bearer ') ? h.slice(7).trim() : '';
+  if (!/^nat_[A-Za-z0-9_-]{20,80}$/.test(token)) return null;
+  try {
+    const r = await fetch(NUGGETAUTH + '/api/userinfo', { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) return null;
+    const { user } = await r.json();
+    return user && typeof user.username === 'string' ? user : null;
+  } catch { return null; }
+}
+const isAdmin = u => !!u && u.type === 'nugget' && ADMINS.includes(u.username.toLowerCase());
 const newIp = () => [randomInt(11, 224), randomInt(0, 256), randomInt(0, 256), randomInt(1, 255)].join('.');
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(204).end();
@@ -46,6 +62,17 @@ export default async function handler(req, res) {
     if (typeof b === 'string') { try { b = JSON.parse(b); } catch { b = {}; } }
     if (!b || typeof b !== 'object') b = {};
 
+    if (b.action === 'whoami' || b.action === 'pin' || b.action === 'unpin') {
+      const user = await nuggetUser(req);
+      if (b.action === 'whoami') return res.status(200).json({ username: user ? user.username : null, admin: isAdmin(user) });
+      if (!isAdmin(user)) return res.status(403).json({ error: 'Only admins can pin servers' });
+      const ip = clean(b.ip, 15);
+      if (!IP_RE.test(ip)) return res.status(400).json({ error: 'Bad server IP' });
+      if (b.action === 'pin') await sql`INSERT INTO pins (ip, pinned_by) VALUES (${ip}, ${user.username}) ON CONFLICT (ip) DO NOTHING`;
+      else await sql`DELETE FROM pins WHERE ip = ${ip}`;
+      return res.status(200).json({ ok: true, pinned: b.action === 'pin' });
+    }
+
     if (b.action === 'create') {
       const [{ n }] = await sql`SELECT count(*)::int AS n FROM servers`;
       if (n >= MAX_SERVERS) return res.status(503).json({ error: 'Too many servers are online right now, try again soon' });
@@ -55,15 +82,27 @@ export default async function handler(req, res) {
       const max = int(b.max, 2, 20, 10);
       const seed = int(b.seed, -2147483648, 2147483647, 0);
       const pub = b.public !== false;
-      const token = randomBytes(18).toString('hex');
-      for (let tries = 0; tries < 6; tries++) {
-        const ip = newIp();
-        const rows = await sql`INSERT INTO servers (ip, name, motd, host_name, players, max_players, seed, is_public, token_hash)
-          VALUES (${ip}, ${name}, ${motd}, ${host}, 1, ${max}, ${seed}, ${pub}, ${hash(token)})
-          ON CONFLICT (ip) DO NOTHING RETURNING ip`;
-        if (rows.length) return res.status(200).json({ ip, token });
+      // A host who hosted before keeps the same IP (so pins and friends' saved IPs keep working).
+      let ip = null, token = null;
+      const oldIp = clean(b.ip, 15), oldToken = clean(b.token, 64);
+      if (IP_RE.test(oldIp) && oldToken) {
+        const own = await sql`SELECT ip FROM server_ips WHERE ip = ${oldIp} AND token_hash = ${hash(oldToken)}`;
+        if (own.length) { ip = oldIp; token = oldToken; }
       }
-      return res.status(500).json({ error: 'Could not pick a free IP, try again' });
+      if (!ip) {
+        token = randomBytes(18).toString('hex');
+        for (let tries = 0; tries < 8 && !ip; tries++) {
+          const cand = newIp();
+          const rows = await sql`INSERT INTO server_ips (ip, token_hash) VALUES (${cand}, ${hash(token)}) ON CONFLICT (ip) DO NOTHING RETURNING ip`;
+          if (rows.length) ip = cand;
+        }
+        if (!ip) return res.status(500).json({ error: 'Could not pick a free IP, try again' });
+      }
+      await sql`INSERT INTO servers (ip, name, motd, host_name, players, max_players, seed, is_public, token_hash)
+        VALUES (${ip}, ${name}, ${motd}, ${host}, 1, ${max}, ${seed}, ${pub}, ${hash(token)})
+        ON CONFLICT (ip) DO UPDATE SET name = EXCLUDED.name, motd = EXCLUDED.motd, host_name = EXCLUDED.host_name, players = 1,
+          max_players = EXCLUDED.max_players, seed = EXCLUDED.seed, is_public = EXCLUDED.is_public, last_seen = now()`;
+      return res.status(200).json({ ip, token });
     }
 
     const ip = clean(b.ip, 15), token = clean(b.token, 64);
