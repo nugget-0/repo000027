@@ -2316,7 +2316,8 @@ function usePlace(target){
   const below=getB(x,y-1,z);
   if(SUPPORT.has(s.id)&&(!below||NS[below])){ toast('That needs a solid block under it',1200); return; }
   if(s.id===33&&below!==1&&below!==2&&below!==27){ toast('Plant saplings on grass or dirt',1200); return; }
-  const hit=(px,py,pz,hw,h)=>x<px+hw&&x+1>px-hw&&y<py+h&&y+1>py&&z<pz+hw&&z+1>pz-hw;
+  // small allowance so standing on the edge of (or just above) a gap doesn't count as being in it
+  const hit=(px,py,pz,hw,h)=>{ const e=.06; return x<px+hw-e&&x+1>px-hw+e&&y<py+h-e&&y+1>py+e&&z<pz+hw-e&&z+1>pz-hw+e; };
   if(hit(P.pos.x,P.pos.y,P.pos.z,P.hw,P.h)) return;
   for(const zb of zombies) if(hit(zb.pos.x,zb.pos.y,zb.pos.z,zb.hw,zb.h)) return;
   let place=s.id;
