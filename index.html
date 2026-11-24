@@ -925,7 +925,7 @@ function renderStatus(){ const ap=armorPts(),key=[P.food,Math.ceil(P.air),ap].jo
   let r=''; if(ap>0) for(let i=0;i<10;i++) r+=icon('armor',clamp(ap-i*2,0,2),'#d8d8d8','#222'); $('armorBar').innerHTML=r; }
 function renderHearts(){ statusKey=''; renderStatus(); let h=''; const n=Math.ceil(P.maxHp/2); for(let i=0;i<n;i++){ const v=clamp(P.health-i*2,0,2); h+=`<div class="heart"><i style="width:${v*50}%"></i></div>`; } $('hearts').innerHTML=h; $('coins').classList.toggle('off',!modOn('shop')); $('coins').textContent=P.coins+' coins'; }
 function flash(){ const f=$('flash'); f.classList.add('hit'); requestAnimationFrame(()=>requestAnimationFrame(()=>f.classList.remove('hit'))); }
-const KEYS_D=[['WASD','Move'],['Mouse','Look around'],['Space','Jump (works while running)'],['Shift','Sprint'],['C','Sneak'],['Left click / F','Mine, attack (hold)'],['Right click / E','Place, eat, wear armor, open chests and tables, sleep in beds (hold with a bow to shoot)'],['1-9 / Wheel','Pick hotbar slot'],['I / Tab','Inventory and crafting'],['Q','Drop item'],['V','First / third person'],['T','Chat (multiplayer)'],['B','Shop (servers with the shop mod)'],['Esc','Pause']];
+const KEYS_D=[['WASD','Move'],['Mouse','Look around'],['Space','Jump (works while running)'],['Shift','Sprint'],['C','Sneak'],['Left click / F','Mine, attack (hold)'],['Right click / E','Place, eat, wear armor, open chests and tables, sleep in beds (hold with a bow to shoot)'],['1-9 / Wheel','Pick hotbar slot'],['I / Tab','Inventory and crafting'],['Q','Drop item'],['V','First / third person'],['B','Shop (servers with the shop mod)'],['T or /','Chat and commands (/help)'],['Esc','Pause']];
 const KEYS_T=[['Left stick','Move'],['Drag right side','Look around'],['JUMP','Jump'],['RUN','Sprint on/off'],['SNEAK','Sneak on/off'],['MINE','Hold to mine or attack'],['PLACE','Place, eat, open table'],['BAG','Inventory and crafting'],['VIEW','First / third person'],['CHAT / SHOP','On servers that have them']];
 const keysHTML=(isTouch?KEYS_T:KEYS_D).map(([k,v])=>`<kbd>${k}</kbd><span>${v}</span>`).join('')+'<p>Start: punch a tree for logs, craft planks, a crafting table, then a pickaxe.</p>';
 $('keys1').innerHTML=keysHTML; $('keys2').innerHTML=keysHTML;
@@ -969,7 +969,7 @@ function setState(s){ state=s;
   $('death').classList.toggle('off',s!=='dead');
   $('inv').classList.toggle('off',s!=='inv'); $('chestui').classList.toggle('off',s!=='chestui'); $('shop').classList.toggle('off',s!=='shop');
   $('bShop').classList.toggle('off',!modOn('shop'));
-  $('bChat').classList.toggle('off',!mp.on);
+  $('bChat').classList.remove('off');
   if(s!=='play'){ if(chatting) closeChat(); mouseL=mouseR=false; keys={}; tState.jump=tState.mine=tState.place=false; document.querySelectorAll('[data-hold]').forEach(b=>b.classList.remove('on')); look.id=null; joyEnd({pointerId:joy.id}); }
 }
 function requestLock(){ if(isTouch||lockFailed) return; try{ const p=cv.requestPointerLock(); if(p&&p.catch) p.catch(()=>onLockError()); }catch(e){ onLockError(); } }
@@ -1062,7 +1062,7 @@ addEventListener('keydown',e=>{
     else if(e.code==='KeyV') toggleView();
     else if(e.code==='KeyQ') dropSelected();
     else if(e.code==='KeyB'&&modOn('shop')) openShop();
-    else if((e.code==='KeyT'||e.code==='Enter')&&(mp.on||isAdminUser)){ e.preventDefault(); openChat(); }
+    else if(e.code==='KeyT'||e.code==='Enter'||e.code==='Slash'){ e.preventDefault(); openChat(e.code==='Slash'?'/':''); }
     else if(e.code==='Escape') pauseGame();
   } else if(state==='inv'){ if(e.code==='KeyI'||e.code==='Tab'||e.code==='Escape') closeInv(); }
   else if(state==='shop'){ if(e.code==='KeyB'||e.code==='Escape') closeShop(); }
@@ -1144,8 +1144,8 @@ function makeMobModel(kind){
   return {g,legs,head,mats};
 }
 function torchNear(x,y,z){ for(let dy=-3;dy<=3;dy++) for(let dz=-8;dz<=8;dz++) for(let dx=-8;dx<=8;dx++) if(getB(x+dx,y+dy,z+dz)===69) return true; return false; }
-function spawnZombie(x,z,kind){ const y=topY(x,z); if(y<2||getB(x,y-1,z)===6||getB(x,y-1,z)===35) return;
-  if(torchNear(x,y,z)) return;   // torches keep monsters away
+function spawnZombie(x,z,kind,forced){ const y=topY(x,z); if(y<2||(!forced&&(getB(x,y-1,z)===6||getB(x,y-1,z)===35))) return;
+  if(!forced&&torchNear(x,y,z)) return;   // torches keep monsters away
   if(!kind){ const r=R(); kind=r<.45?'zombie':r<.7?'skeleton':r<.9?'creeper':'spider'; }
   const M=MOB[kind],m=makeMobModel(kind); scene.add(m.g);
   zombies.push({kind,m,pos:new THREE.Vector3(x+.5,y,z+.5),vel:new THREE.Vector3(),hw:M.hw,h:M.h,onGround:false,hp:M.hp,hit:0,atk:1,phase:0,burn:0,yaw:0,jump:false,kb:0,fuse:0,angry:false}); }
@@ -1221,7 +1221,7 @@ function sleepAt(t){ spawn={x:t.x+.5,y:t.y+1,z:t.z+.5};
   if(mp.on&&mp.peers.size>0){ toast('Spawn point set. You can only skip the night when you are the only one online',2400); return; }
   if(zombies.some(z=>Math.hypot(z.pos.x-P.pos.x,z.pos.z-P.pos.z)<10&&z.kind!=='spider')){ toast('You can not sleep now, there are monsters nearby',2000); return; }
   $('sleepFx').classList.add('on'); setTimeout(()=>{ time=.03; while(zombies.length) removeZombie(0); setTimeout(()=>$('sleepFx').classList.remove('on'),500); toast('Good morning!',1800); },1300); }
-function hurt(n,kx=0,kz=0,raw){ if(P.dead||P.hurtT>0||n<=0) return;
+function hurt(n,kx=0,kz=0,raw){ if(P.dead||P.hurtT>0||n<=0||P.creative) return;
   if(!raw) n*=1-Math.min(20,armorPts())*.04; P.exh+=.1;
   P.health-=n; P.hurtT=.5; P.lastHurt=clock;
   if(kx||kz){ P.vel.x+=kx*7; P.vel.z+=kz*7; P.vel.y=Math.max(P.vel.y,5); P.kb=.25; }
@@ -1259,7 +1259,7 @@ const playerKey=()=>mp.on&&mp.ip?PPRE+mp.ip:saveKey();
 let saveWarned=false;
 function save(){ const key=saveKey(); if(!key||state==='loading') return;
   try{ const wpart={v:3,seed,e3:encEdits(),time,spawn,ch:[...chestData]};
-    const ppart={inv,sel,pos:[P.pos.x,P.pos.y,P.pos.z],yaw:P.yaw,pitch:P.pitch,health:P.dead?P.maxHp:P.health,mh:P.maxHp,co:P.coins,dead:P.dead,fd:P.food,ar:P.armor};
+    const ppart={inv,sel,pos:[P.pos.x,P.pos.y,P.pos.z],yaw:P.yaw,pitch:P.pitch,health:P.dead?P.maxHp:P.health,mh:P.maxHp,co:P.coins,dead:P.dead,fd:P.food,ar:P.armor,hm:P.home||null,gm:P.creative?1:0};
     const pk=playerKey();
     if(pk===key) localStorage.setItem(key,JSON.stringify({...wpart,...ppart}));
     else { const old=loadSave()||{}; delete old.e64; delete old.edits; localStorage.setItem(key,JSON.stringify({...old,...wpart})); localStorage.setItem(pk,JSON.stringify(ppart)); }
@@ -1276,7 +1276,7 @@ function applyWorldSave(s){
   time=typeof s.time==='number'?s.time:.08; }
 function applyPlayerSave(s){
   if(Array.isArray(s.inv)){ inv=new Array(36).fill(null); s.inv.slice(0,36).forEach((v,i)=>{ if(v&&(BLOCKS[v.id]||ITEMS[v.id])&&v.n>0) inv[i]={id:v.id,n:Math.min(v.n,64)}; }); }
-  sel=clamp(s.sel|0,0,8); P.maxHp=clamp(s.mh|0||20,4,40); P.health=clamp(s.health||P.maxHp,1,P.maxHp); P.coins=Math.max(0,s.co|0); P.food=clamp(Number.isFinite(s.fd)?s.fd:20,0,20); P.armor=Array.isArray(s.ar)?[0,1,2,3].map(k=>{ const id=s.ar[k]; return ITEMS[id]&&ITEMS[id].armor===k?id:0; }):[0,0,0,0];
+  sel=clamp(s.sel|0,0,8); P.maxHp=clamp(s.mh|0||20,4,40); P.health=clamp(s.health||P.maxHp,1,P.maxHp); P.coins=Math.max(0,s.co|0); P.food=clamp(Number.isFinite(s.fd)?s.fd:20,0,20); P.home=Array.isArray(s.hm)&&s.hm.length===3&&s.hm.every(Number.isFinite)?s.hm:null; P.creative=!!s.gm; P.armor=Array.isArray(s.ar)?[0,1,2,3].map(k=>{ const id=s.ar[k]; return ITEMS[id]&&ITEMS[id].armor===k?id:0; }):[0,0,0,0];
   if(Array.isArray(s.pos)&&!s.dead&&s.pos.every(Number.isFinite)&&(s.v===3||s.e3===undefined&&!s.e64)){ P.pos.set(s.pos[0],s.pos[1],s.pos[2]); P.yaw=s.yaw||0; P.pitch=s.pitch||0; P.fallMax=P.pos.y; }
   else { P.pos.set(spawn.x,spawn.y,spawn.z); P.fallMax=spawn.y; } }
 function applySave(s){ applyWorldSave(s); const ps=playerKey()===saveKey()?s:(loadPlayerSave()||(worldKey.startsWith('mp:')&&Array.isArray(s.inv)?s:null)); if(ps) applyPlayerSave(ps); else resetPlayer(); }
@@ -1285,7 +1285,7 @@ function clearWorldEntities(){ while(zombies.length) removeZombie(0); while(arro
   for(const b of booms){ scene.remove(b.m); b.m.material.dispose(); } booms.length=0; resetBreak(); }
 // Start a world from a seed (with no saved data yet)
 function resetWorld(sd){ seed=sd|0; chestData.clear(); dropAllChunks(); clearEdits(); rsSet.clear(); growSet.clear(); powered=new Set(); }
-function freshWorld(sd){ P.maxHp=20; P.coins=0; P.armor=[0,0,0,0]; P.food=20; P.fly=false; P.frozen=false; clearWorldEntities(); resetWorld(sd); inv=new Array(36).fill(null); sel=0; time=.08;
+function freshWorld(sd){ P.maxHp=20; P.coins=0; P.home=null; P.creative=false; P.armor=[0,0,0,0]; P.food=20; P.fly=false; P.frozen=false; clearWorldEntities(); resetWorld(sd); inv=new Array(36).fill(null); sel=0; time=.08;
   spawn=findSpawn(); resetPlayer(); }
 function finishLoad(){ ensureChunk(P.pos.x,P.pos.z); renderHotbar(); renderHearts(); }
 function seedFrom(str){ str=String(str||'').trim(); if(!str) return (R()*2147483647)|0; return /^-?\d{1,10}$/.test(str)?(Number(str)|0):hashStr(str); }
@@ -1397,7 +1397,8 @@ function onRoom(o){
     case 'tnt': if(validKey(o.i)&&wget(o.i)===26){ const [x,y,z]=unpack(o.i); ignite(x,y,z,99,true); } break;
     case 'boom': boomAt(+o.x,+o.y,+o.z); break;
     case 'hit': if(o.to===mp.id&&!modOn('nopvp')){ lastHit={id:o.id,t:clock}; } if(o.to===mp.id&&!modOn('nopvp')) hurt(clamp(Math.round(+o.d)||1,1,10),clamp(+o.kx||0,-1,1),clamp(+o.kz||0,-1,1)); break;
-    case 'chat': if(typeof o.m==='string') addChat(p?p.name:cleanName(o.n),o.m.slice(0,120),p&&p.admin); break;
+    case 'pm': if(o.to===mp.id&&typeof o.m==='string'&&!muted.has((p?p.name:cleanName(o.n)).toLowerCase())) chatLine(`<span class="sys">[${esc(p?p.name:cleanName(o.n))} whispers]</span> ${esc(o.m.slice(0,120))}`); break;
+    case 'chat': if(typeof o.m==='string'&&!muted.has((p?p.name:cleanName(o.n)).toLowerCase())) addChat(p?p.name:cleanName(o.n),o.m.slice(0,120),p&&p.admin); break;
     case 'adm': if(p&&typeof o.b==='string') checkBadge(p,o.b); break;
     case 'acmd': if(typeof o.s==='string') runSignedCmd(o.s); break;
     case 'sys': if(typeof o.m==='string') sysChat(o.m.slice(0,120)); break;
@@ -1456,8 +1457,8 @@ function chatLine(html){ const log=$('chatlog'),d=document.createElement('div');
   while(log.children.length>9) log.firstChild.remove(); setTimeout(()=>d.classList.add('old'),10000); }
 function addChat(name,m,admin){ chatLine(`<b${admin?' class="adm"':''}>${admin?'[ADMIN] ':''}${esc(name)}:</b> ${esc(m)}`); }
 function sysChat(m){ chatLine(`<span class="sys">${esc(m)}</span>`); }
-function openChat(){ if(!(mp.on||isAdminUser)||state!=='play') return; $('chat').classList.remove('off'); chatting=true; keys={}; const i=$('chatIn'); i.classList.remove('off'); $('chat').classList.add('typing'); i.value=''; i.focus(); }
-function closeChat(){ chatting=false; const i=$('chatIn'); i.blur(); i.classList.add('off'); $('chat').classList.remove('typing'); if(!mp.on) $('chat').classList.add('off'); }
+function openChat(pre){ if(state!=='play') return; $('chat').classList.remove('off'); chatting=true; keys={}; const i=$('chatIn'); i.classList.remove('off'); $('chat').classList.add('typing'); i.value=pre||''; i.focus(); }
+function closeChat(){ chatting=false; const i=$('chatIn'); i.blur(); i.classList.add('off'); $('chat').classList.remove('typing'); }
 $('chatIn').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ const m=$('chatIn').value.trim().slice(0,120); if(m.startsWith('/')) runCommand(m); else if(m&&mp.on){ roomPub({t:'chat',n:mp.name,m}); addChat(mp.name,m,isAdminUser); } closeChat(); } else if(e.key==='Escape') closeChat(); });
 
 // ----- servers with IPs (listed live through Neon Realtime) -----
@@ -1578,31 +1579,65 @@ async function runSignedCmd(sg){ const r=await api('GET',null,'?cmd='+encodeURIC
   else if(c.c==='hearts'){ P.maxHp=20; P.health=Math.min(P.health,20); renderHearts(); sysChat(`Admin ${by} reset your hearts`); }
   else if(c.c==='announce'&&c.text){ sysChat('[ANNOUNCEMENT] '+c.text); toast(c.text,5000); }
   else if(c.c==='time'&&c.a.length===1){ time=((c.a[0]%1)+1)%1; }
-  else if(c.c==='freeze'){ P.frozen=!P.frozen; sysChat(P.frozen?`Admin ${by} froze you`:'You can move again'); } }
+  else if(c.c==='freeze'){ P.frozen=!P.frozen; sysChat(P.frozen?`Admin ${by} froze you`:'You can move again'); }
+  else if(c.c==='setspawn'&&c.a.length===3){ spawn={x:c.a[0],y:c.a[1],z:c.a[2]}; save(); sysChat(`Admin ${by} set the world spawn`); }
+  else if(c.c==='kill'){ P.creative=false; P.hurtT=0; die(); sysChat(`Admin ${by} killed you`); }
+  else if(c.c==='clear'){ inv=new Array(36).fill(null); invChanged(); sysChat(`Admin ${by} cleared your inventory`); }
+  else if(c.c==='feed'){ P.food=20; renderHearts(); sysChat(`Admin ${by} fed you`); }
+  else if(c.c==='gamemode'){ setGamemode(c.text==='creative'?'creative':'survival'); } }
 const findPeer=n=>{ n=String(n||'').toLowerCase(); let best=null; for(const p of mp.peers.values()){ const pn=p.name.toLowerCase(); if(pn===n) return p; if(!best&&pn.startsWith(n)) best=p; } return best; };
 function findItem(q){ q=String(q||'').toLowerCase().replace(/_/g,' '); if(/^\d+$/.test(q)){ const id=+q; return BLOCKS[id]||ITEMS[id]?id:0; }
   for(const pool of [ITEMS,BLOCKS]) for(const k in pool) if(pool[k].name.toLowerCase()===q) return +k;
   for(const pool of [ITEMS,BLOCKS]) for(const k in pool) if(pool[k].name.toLowerCase().includes(q)) return +k; return 0; }
-const ADMIN_HELP='/fly · /heal [name] · /give item [count] · /day · /night · /tp name · /bring name · /kick name · /freeze name · /hearts name · /announce text';
+const PLAYER_HELP='Everyone: /help · /list · /msg name text · /mute name · /unmute name · /coords · /seed · /spawn · /sethome · /home';
+const ADMIN_HELP='Admins: /gamemode creative|survival [name] · /fly · /heal [name] · /feed [name] · /give item [count] · /clear [name] · /kill [name|mobs] · /effect speed|regen [seconds] · /summon mob [count] · /day /night /noon /midnight · /time 0-24000 · /setworldspawn · /tp name | /tp x y z · /bring name · /tpall · /kick name · /freeze name · /hearts name · /announce text';
+const muted=new Set();
+function teleport(x,y,z){ ensureChunk(x,z); P.pos.set(x,y,z); P.vel.set(0,0,0); P.fallMax=P.pos.y; }
+function setGamemode(m){ P.creative=m==='creative'; if(!P.creative) P.fly=false; else { P.health=P.maxHp; P.food=20; } renderHearts(); sysChat(P.creative?'Creative mode: no damage, no hunger, instant mining, blocks are free, /fly to fly':'Survival mode'); }
+const SUMMON=['zombie','skeleton','creeper','spider','cow','pig','chicken','sheep'];
 function runCommand(line){ const [cmd,...args]=line.slice(1).trim().split(/\s+/),c=(cmd||'').toLowerCase();
-  if(!isAdminUser){ sysChat('Commands are for admins. Sign in with Nugget as an admin in the Multiplayer tab.'); return; }
   const target=()=>{ const p=findPeer(args[0]); if(!p) sysChat(`No player called "${args[0]||''}" here`); return p; };
-  if(c==='help') sysChat(ADMIN_HELP);
-  else if(c==='fly'){ P.fly=!P.fly; sysChat(P.fly?'Flying on: Space up, C down':'Flying off'); }
-  else if(c==='heal'){ if(args[0]&&mp.on){ const p=target(); if(p) sendAdminCmd({c:'heal',to:p.id}); } else { P.health=P.maxHp; renderHearts(); sysChat('Healed'); } }
-  else if(c==='give'){ const n=args.length>1&&/^\d+$/.test(args[args.length-1])?+args.pop():1; const id=findItem(args.join(' ')); if(!id||id===12){ sysChat('No item called "'+args.join(' ')+'"'); return; }
+  const posArr=()=>[+P.pos.x.toFixed(2),+(P.pos.y+.1).toFixed(2),+P.pos.z.toFixed(2)];
+  // --- commands everyone can use ---
+  if(c==='help'){ sysChat(PLAYER_HELP); if(isAdminUser) sysChat(ADMIN_HELP); return; }
+  if(c==='list'){ sysChat(mp.on?`${mp.peers.size+1} online: ${[mp.name,...[...mp.peers.values()].map(p=>p.name+(p.admin?' [ADMIN]':''))].join(', ')}`:'You are playing alone'); return; }
+  if(c==='msg'||c==='w'||c==='tell'){ const p=target(); const m=args.slice(1).join(' ').slice(0,120); if(p&&m){ roomPub({t:'pm',to:p.id,n:mp.name,m}); chatLine(`<span class="sys">[you → ${esc(p.name)}]</span> ${esc(m)}`); } return; }
+  if(c==='mute'||c==='unmute'){ const n=(args[0]||'').toLowerCase(); if(!n) return sysChat('Who? /'+c+' name'); if(c==='mute') muted.add(n); else muted.delete(n); sysChat(`${c==='mute'?'Muted':'Unmuted'} ${args[0]}`); return; }
+  if(c==='coords'||c==='pos'){ sysChat(`X ${Math.floor(P.pos.x)}  Y ${Math.floor(P.pos.y)}  Z ${Math.floor(P.pos.z)} · ${BIOMES[column(Math.floor(P.pos.x),Math.floor(P.pos.z))[1]]}`); return; }
+  if(c==='seed'){ sysChat('World seed: '+seed); return; }
+  if(c==='spawn'){ ensureChunk(spawn.x,spawn.z); teleport(spawn.x,Math.max(spawn.y,topY(Math.floor(spawn.x),Math.floor(spawn.z))),spawn.z); sysChat('Teleported to spawn'); return; }
+  if(c==='sethome'){ P.home=posArr(); save(); sysChat('Home set here. Use /home to come back'); return; }
+  if(c==='home'){ if(!P.home) return sysChat('No home yet. Stand somewhere and type /sethome'); teleport(...P.home); sysChat('Welcome home'); return; }
+  // --- admin commands ---
+  if(!isAdminUser){ sysChat('Unknown command, or it is for admins. '+PLAYER_HELP); return; }
+  if(c==='fly'){ P.fly=!P.fly; sysChat(P.fly?'Flying on: Space up, C down':'Flying off'); }
+  else if(c==='gamemode'||c==='gm'){ const m=(args[0]||'').toLowerCase().startsWith('c')||args[0]==='1'?'creative':'survival';
+    if(args[1]&&mp.on){ args.shift(); const p=target(); if(p){ sendAdminCmd({c:'gamemode',to:p.id,text:m}); sysChat(`${p.name} is now in ${m}`); } } else setGamemode(m); }
+  else if(c==='heal'||c==='feed'){ if(args[0]&&mp.on){ const p=target(); if(p) sendAdminCmd({c,to:p.id}); } else { if(c==='heal') P.health=P.maxHp; P.food=20; renderHearts(); sysChat(c==='heal'?'Healed':'Fed'); } }
+  else if(c==='give'){ const n=args.length>1&&/^\d+$/.test(args[args.length-1])?+args.pop():1; const id=findItem(args.join(' ')); if(!id||id===12||id===35){ sysChat('No item called "'+args.join(' ')+'"'); return; }
     const left=addItem(id,clamp(n,1,640)); if(left>0) spawnDrop(id,left,P.pos.x,P.pos.y+1,P.pos.z); sysChat(`Gave you ${n} ${itemName(id)}`); }
-  else if(c==='day'||c==='night'){ const v=c==='day'?.25:.75; time=v; if(mp.on) sendAdminCmd({c:'time',a:[v]}); sysChat('Time set to '+c); }
-  else if(c==='tp'){ const p=target(); if(p){ P.pos.set(p.x,p.y+.1,p.z); P.vel.set(0,0,0); P.fallMax=P.pos.y; } }
-  else if(c==='bring'){ const p=target(); if(p) sendAdminCmd({c:'bring',to:p.id,a:[+P.pos.x.toFixed(2),+(P.pos.y+.1).toFixed(2),+P.pos.z.toFixed(2)]}); }
+  else if(c==='clear'){ if(args[0]&&mp.on){ const p=target(); if(p) sendAdminCmd({c:'clear',to:p.id}); } else { inv=new Array(36).fill(null); invChanged(); sysChat('Inventory cleared'); } }
+  else if(c==='kill'){ if((args[0]||'').toLowerCase()==='mobs'){ const n=zombies.length; while(zombies.length) removeZombie(0); sysChat(`Removed ${n} monsters`); }
+    else if(args[0]&&mp.on){ const p=target(); if(p) sendAdminCmd({c:'kill',to:p.id}); } else { P.creative=false; die(); } }
+  else if(c==='effect'){ const e=(args[0]||'').toLowerCase(),sec=clamp(+args[1]||30,1,600); if(e==='speed') P.speedT=sec; else if(e==='regen'||e==='regeneration') P.regenFx=sec; else return sysChat('Effects: speed, regen'); sysChat(`${e} for ${sec}s`); }
+  else if(c==='summon'){ const kind=(args[0]||'').toLowerCase(),n=clamp(+args[1]||1,1,20); if(!SUMMON.includes(kind)) return sysChat('Summon one of: '+SUMMON.join(', '));
+    const d=lookDir(); for(let k=0;k<n;k++){ const x=Math.floor(P.pos.x+d.x*4+(R()-.5)*3),z=Math.floor(P.pos.z+d.z*4+(R()-.5)*3);
+      if(MOB[kind]) spawnZombie(x,z,kind,true); else { const y=topY(x,z); if(y>0) spawnAnimal(kind,x+.5,y,z+.5,false); } } sysChat(`Summoned ${n} ${kind}`); }
+  else if(['day','night','noon','midnight'].includes(c)||c==='time'){ let v={day:.03,noon:.25,night:.55,midnight:.75}[c];
+    if(c==='time'){ const t=(args[0]||'').toLowerCase(); v={day:.03,noon:.25,night:.55,midnight:.75}[t]; if(v===undefined){ const n=+(args[t==='set'?1:0]); if(!Number.isFinite(n)) return sysChat('Use /time 0-24000 or /time day|noon|night|midnight'); v=n>1?(n%24000)/24000:n; } }
+    time=v; if(mp.on) sendAdminCmd({c:'time',a:[v]}); sysChat('Time changed'); }
+  else if(c==='setworldspawn'||c==='setspawn'){ spawn={x:P.pos.x,y:P.pos.y+.1,z:P.pos.z}; save(); if(mp.on) sendAdminCmd({c:'setspawn',to:'all',a:posArr()}); sysChat(`World spawn set to ${Math.floor(P.pos.x)} ${Math.floor(P.pos.y)} ${Math.floor(P.pos.z)}`); }
+  else if(c==='tp'){ if(args.length>=3&&args.slice(0,3).every(a=>Number.isFinite(+a))){ const [x,y,z]=args.map(Number); teleport(x,clamp(y,1,H+20),z); sysChat(`Teleported to ${x} ${y} ${z}`); } else { const p=target(); if(p) teleport(p.x,p.y+.1,p.z); } }
+  else if(c==='bring'){ const p=target(); if(p) sendAdminCmd({c:'bring',to:p.id,a:posArr()}); }
+  else if(c==='tpall'){ if(mp.on){ sendAdminCmd({c:'bring',to:'all',a:posArr()}); sysChat('Brought everyone to you'); } }
   else if(c==='kick'||c==='freeze'||c==='hearts'){ const p=target(); if(p){ sendAdminCmd({c,to:p.id}); sysChat(`${c} sent to ${p.name}`); } }
   else if(c==='announce'){ const text=args.join(' '); if(text){ sendAdminCmd({c:'announce',text}); sysChat('[ANNOUNCEMENT] '+text); } }
-  else sysChat('Unknown command. '+ADMIN_HELP); }
+  else sysChat('Unknown command. Type /help'); }
 function renderAdmin(){ const box=$('adminBox'); box.classList.toggle('off',!isAdminUser); if(!isAdminUser) return;
   const ps=mp.on?[...mp.peers.values()]:[];
-  box.innerHTML=`<h3 class="px">Admin</h3><div class="abtns"><button class="mini" data-a="/fly">${P.fly?'Stop flying':'Fly'}</button><button class="mini" data-a="/heal">Heal me</button><button class="mini" data-a="/day">Day</button><button class="mini" data-a="/night">Night</button><button class="mini" data-a="/give diamond 16">16 diamonds</button><button class="mini" data-a="/give iron pickaxe">Iron pickaxe</button></div>`
+  box.innerHTML=`<h3 class="px">Admin</h3><div class="abtns"><button class="mini" data-a="/fly">${P.fly?'Stop flying':'Fly'}</button><button class="mini" data-a="/gamemode ${P.creative?'survival':'creative'}">${P.creative?'Survival':'Creative'}</button><button class="mini" data-a="/heal">Heal me</button><button class="mini" data-a="/setworldspawn">Set spawn here</button><button class="mini" data-a="/kill mobs">Clear mobs</button><button class="mini" data-a="/day">Day</button><button class="mini" data-a="/night">Night</button><button class="mini" data-a="/give diamond 16">16 diamonds</button><button class="mini" data-a="/give iron pickaxe">Iron pickaxe</button></div>`
     +(ps.length?ps.map(p=>`<div class="aplayer"><b>${esc(p.name)}</b>${['tp','bring','heal','freeze','hearts','kick'].map(k=>`<button class="mini${k==='kick'?' del':''}" data-a="/${k} ${esc(p.name)}">${k[0].toUpperCase()+k.slice(1)}</button>`).join('')}</div>`).join(''):`<p class="hint">${mp.on?'No other players right now.':'Join or host a server to manage players.'}</p>`)
-    +`<p class="hint">Chat commands (press T): ${ADMIN_HELP}</p>`; }
+    +`<p class="hint">Chat commands (press T or /): ${ADMIN_HELP}</p>`; }
 $('adminBox').addEventListener('click',e=>{ const b=e.target.closest('[data-a]'); if(!b) return; runCommand(b.dataset.a); renderAdmin(); });
 function netTick(dt){
   if(mp.on){
@@ -1823,7 +1858,7 @@ function update(dt){
   if(P.onGround) P.phase+=hs*dt*2.2;
   P.walk+=(Math.min(1,hs/4.3)*(P.onGround?1:.3)-P.walk)*Math.min(1,dt*10);
   // hunger and air
-  if(!P.dead){ const calm=modOn('peaceful');
+  if(!P.dead){ const calm=modOn('peaceful')||P.creative;
     if(P.sprint&&hs>1) P.exh+=hs*dt*.1;
     if(P.exh>=4){ P.exh-=4; if(!calm) P.food=Math.max(0,P.food-1); }
     if(P.food===0&&P.health>1&&!calm){ P.starveT+=dt; if(P.starveT>4){ P.starveT=0; hurt(1,0,0,true); } } else P.starveT=0;
@@ -1857,10 +1892,10 @@ function update(dt){
     else if(target&&breakDelay<=0){
       mining=true;
       const key=idx(target.x,target.y,target.z); if(key!==breakKey){ breakKey=key; breakT=0; }
-      breakT+=dt/breakTime(target.b,heldId())*(modOn('fastmine')?2:1);
+      breakT+=P.creative&&BLOCKS[target.b]&&BLOCKS[target.b].time!==Infinity?1:dt/breakTime(target.b,heldId())*(modOn('fastmine')?2:1);
       if(breakT>=1){
         const tb=target.b,dr=dropFor(tb,heldId()); setBlock(target.x,target.y,target.z,0);
-        if(dr) spawnDrop(dr,(BLOCKS[tb]&&BLOCKS[tb].dropN)||1,target.x+.5,target.y+.5,target.z+.5,(R()-.5)*2,3,(R()-.5)*2);
+        if(dr&&!P.creative) spawnDrop(dr,(BLOCKS[tb]&&BLOCKS[tb].dropN)||1,target.x+.5,target.y+.5,target.z+.5,(R()-.5)*2,3,(R()-.5)*2);
         flushPendingDrops(target.x+.5,target.y+.5,target.z+.5); afterBreak(target.x,target.y,target.z,tb);
         resetBreak(); breakDelay=.15; P.exh+=.005;
       } else { crackMesh.visible=true; crackMesh.material=crackMats[Math.min(9,Math.floor(breakT*10))]; crackMesh.position.set(target.x+.5,target.y+.5,target.z+.5); }
@@ -1950,7 +1985,7 @@ function usePlace(target){
   let place=s.id;
   if(place===50){ const d=lookDir(),ax=Math.abs(d.x),ay=Math.abs(d.y),az=Math.abs(d.z); place=50+(ay>ax&&ay>az?(d.y>0?2:3):ax>az?(d.x>0?0:1):(d.z>0?4:5)); }
   if(!NS[place]) for(const a of animals){ const d=ANIMAL[a.type]; if(hit(a.pos.x,a.pos.y,a.pos.z,d.hw,d.h)) return; }
-  setBlock(x,y,z,place); takeSelected(); P.once=1; if(GRAV.has(place)) dropFalling(x,y,z);
+  setBlock(x,y,z,place); if(!P.creative) takeSelected(); P.once=1; if(GRAV.has(place)) dropFalling(x,y,z);
 }
 let menuAng=0;
 function menuCam(dt){ menuAng+=dt*.06; camera.position.set(spawn.x+Math.cos(menuAng)*42,spawn.y+24,spawn.z+Math.sin(menuAng)*42); camera.lookAt(spawn.x,spawn.y+2,spawn.z); fpArm.visible=false; pm.g.visible=false; outline.visible=false; crackMesh.visible=false; }

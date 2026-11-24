@@ -46,7 +46,7 @@ function unpack(tok) {
   if (want.length !== got.length || !timingSafeEqual(want, got)) return null;
   try { const d = JSON.parse(Buffer.from(p, 'base64url').toString()); return d && d.e > Date.now() ? d : null; } catch { return null; }
 }
-const CMDS = ['kick', 'bring', 'heal', 'hearts', 'announce', 'time', 'freeze'];
+const CMDS = ['kick', 'bring', 'heal', 'hearts', 'announce', 'time', 'freeze', 'setspawn', 'kill', 'clear', 'feed', 'gamemode'];
 const isAdmin = u => !!u && u.type === 'nugget' && ADMINS.includes(u.username.toLowerCase());
 const newIp = () => [randomInt(11, 224), randomInt(0, 256), randomInt(0, 256), randomInt(1, 255)].join('.');
 
