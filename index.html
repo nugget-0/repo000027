@@ -889,7 +889,10 @@ function raycast(ox,oy,oz,dx,dy,dz,max){
   let tmz=sz>0?(z+1-oz)*tdz:sz<0?(oz-z)*tdz:Infinity;
   let t=0,nx=0,ny=0,nz=0;
   while(t<=max){
-    if(y>=0&&y<H){ const b=getB(x,y,z); if(b&&b!==35) return {x,y,z,nx,ny,nz,t,b}; }
+    if(y>=0&&y<H){ const b=getB(x,y,z); if(b&&b!==35){ const sh=BLOCKS[b]&&BLOCKS[b].shape,L=sh==='bx'?blockBoxes(b,x,y,z,true):Array.isArray(sh)?[sh]:null;
+      if(!L) return {x,y,z,nx,ny,nz,t,b};
+      let ht=null; for(const q of L){ const tt=rayBox([ox,oy,oz],[dx,dy,dz],[x+q[0],y+q[1],z+q[2]],[x+q[3],y+q[4],z+q[5]]); if(tt!==null&&(ht===null||tt<ht)) ht=tt; }
+      if(ht!==null&&ht<=max){ let mn=[1,1,1],mx=[0,0,0]; for(const q of L) for(let a=0;a<3;a++){ mn[a]=Math.min(mn[a],q[a]); mx[a]=Math.max(mx[a],q[a+3]); } return {x,y,z,nx,ny,nz,t:ht,b,mn,mx}; } } }
     if(tmx<tmy&&tmx<tmz){ x+=sx; t=tmx; tmx+=tdx; nx=-sx; ny=0; nz=0; }
     else if(tmy<tmz){ y+=sy; t=tmy; tmy+=tdy; nx=0; ny=-sy; nz=0; }
     else { z+=sz; t=tmz; tmz+=tdz; nx=0; ny=0; nz=-sz; }
@@ -903,26 +906,27 @@ function rayBox(o,d,mn,mx){ let t0=0,t1=Infinity;
   return t0; }
 
 /* ================= PHYSICS ================= */
-function collides(x,y,z,hw,h){ const e=1e-4;
+function collides(x,y,z,hw,h,noBox){ const e=1e-4;
   const x0=Math.floor(x-hw+e),x1=Math.floor(x+hw-e),y0=Math.floor(y+e),y1=Math.floor(y+h-e),z0=Math.floor(z-hw+e),z1=Math.floor(z+hw-e);
   for(let yy=y0-1;yy<=y1;yy++) for(let zz=z0;zz<=z1;zz++) for(let xx=x0;xx<=x1;xx++){
     if(yy>=y0&&solidAt(xx,yy,zz)) return true;
-    const b=getB(xx,yy,zz); if(BX[b]) for(const q of blockBoxes(b,xx,yy,zz,false))
+    const b=noBox?0:getB(xx,yy,zz); if(BX[b]) for(const q of blockBoxes(b,xx,yy,zz,false))
       if(x+hw>xx+q[0]+e&&x-hw<xx+q[3]-e&&y+h>yy+q[1]+e&&y<yy+q[4]-e&&z+hw>zz+q[2]+e&&z-hw<zz+q[5]-e) return true; }
   return false; }
 // Move one axis; if it hits something, slide up to the contact point. Returns true when blocked.
-function sweep(e,ax,d){ const p=e.pos,o=p[ax]; p[ax]=o+d; if(!collides(p.x,p.y,p.z,e.hw,e.h)) return false;
-  let lo=0,hi=1; for(let k=0;k<7;k++){ const m=(lo+hi)/2; p[ax]=o+d*m; if(collides(p.x,p.y,p.z,e.hw,e.h)) hi=m; else lo=m; }
+function sweep(e,ax,d){ const p=e.pos,o=p[ax],nb=e.noBox; p[ax]=o+d; if(!collides(p.x,p.y,p.z,e.hw,e.h,nb)) return false;
+  let lo=0,hi=1; for(let k=0;k<7;k++){ const m=(lo+hi)/2; p[ax]=o+d*m; if(collides(p.x,p.y,p.z,e.hw,e.h,nb)) hi=m; else lo=m; }
   p[ax]=o+d*lo; return true; }
 function moveEntity(e,dt){
   const sp=Math.max(Math.abs(e.vel.x),Math.abs(e.vel.y),Math.abs(e.vel.z))*dt;
   const n=Math.max(1,Math.ceil(sp/.35)),st=dt/n,p=e.pos; let hx=false,hz=false; const wasG=e.onGround; e.onGround=false;
+  e.noBox=collides(p.x,p.y,p.z,e.hw,e.h)&&!collides(p.x,p.y,p.z,e.hw,e.h,true);
   for(let i=0;i<n;i++){
     const vy=e.vel.y*st; if(vy&&sweep(e,'y',vy)){ if(vy<0) e.onGround=true; e.vel.y=0; }
     for(const ax of ['x','z']){ const d=e.vel[ax]*st; if(!d) continue; const o=p[ax];
       if(!sweep(e,ax,d)) continue;
       const cy=p.y,ca=p[ax]; let stepped=false;
-      if(wasG||e.onGround){ p.y=cy+.55; p[ax]=o+d; if(!collides(p.x,p.y,p.z,e.hw,e.h)){ sweep(e,'y',-.56); stepped=true; e.onGround=true; } else { p.y=cy; p[ax]=ca; } }   // walk up slabs and stairs
+      if(wasG||e.onGround){ p.y=cy+.55; p[ax]=o+d; if(!collides(p.x,p.y,p.z,e.hw,e.h,e.noBox)){ sweep(e,'y',-.56); stepped=true; e.onGround=true; } else { p.y=cy; p[ax]=ca; } }   // walk up slabs and stairs
       if(!stepped){ e.vel[ax]=0; if(ax==='x') hx=true; else hz=true; } }
   }
   return {hx,hz};
@@ -1698,6 +1702,7 @@ function onRoom(o){
     case 'bs': if(Array.isArray(o.l)) for(let i=0;i+1<o.l.length;i+=2) applyNetBlock(o.l[i],o.l[i+1]); break;
     case 'sync': if(o.to===mp.id) onSync(o); break;
     case 'ents': if(!authority()) onEnts(o.l); break;
+    case 'fall': if([o.x,o.y,o.z].every(Number.isInteger)&&GRAV.has(o.b)&&fallers.length<200) spawnFaller(o.b,o.x,o.y,o.z,true); break;
     case 'mhit': if(authority()&&Number.isFinite(o.d)){ const f=findEnt(o.e); if(f&&!f.e.remote){ damageEnt(f.e,clamp(o.d,0,30),clamp(+o.kx||0,-1,1),clamp(+o.kz||0,-1,1),f.a); f.e.lastBy=o.id; } } break;
     case 'feed': if(authority()){ const f=findEnt(o.e); if(f&&f.a&&!f.e.remote) applyFeed(f.e); } break;
     case 'loot': if(o.to===mp.id&&Array.isArray(o.items)&&Array.isArray(o.p)&&o.p.every(Number.isFinite)){ for(const [id,n] of o.items.slice(0,6)) if((BLOCKS[id]||ITEMS[id])&&n>0) spawnDrop(id,Math.min(n|0,16),o.p[0],o.p[1],o.p[2],(R()-.5)*2,3,(R()-.5)*2); if(o.xp>0) gainXp(Math.min(o.xp|0,20)); if(o.a==='kill'||o.a==='elder'){ ach('kill'); ach(o.a); } } break;
@@ -2038,10 +2043,23 @@ const pendingDrops=[];
 function spawnDropLater(id,n){ pendingDrops.push([id,n]); }
 function flushPendingDrops(x,y,z){ while(pendingDrops.length){ const [id,n]=pendingDrops.pop(); spawnDrop(id,n,x,y,z,(R()-.5)*2,3,(R()-.5)*2); } }
 // After a block is broken: things resting on top pop off, a broken piston takes its head with it.
+// Sand and gravel fall as a block you can watch, and land on anything solid (doors, slabs, fences and stairs included).
+const fallers=[],fallGeo=new Map(),fallMat=new THREE.MeshBasicMaterial({map:tex});
+const canFallInto=u=>u===0||u===35||(NS[u]&&!SUPPORT.has(u)&&!BX[u]&&!isLadder(u)&&u!==189);
+function fallMesh(b){ if(!fallGeo.has(b)){ const g=new THREE.BoxGeometry(1,1,1),[u0,u1,v0,v1]=tileUV(BLOCKS[b].t[1]),uv=g.attributes.uv;
+    for(let k=0;k<uv.count;k++) uv.setXY(k,u0+(u1-u0)*uv.getX(k),v0+(v1-v0)*uv.getY(k)); fallGeo.set(b,g); }
+  const m=new THREE.Mesh(fallGeo.get(b),fallMat); scene.add(m); return m; }
+function spawnFaller(b,x,y,z,ghost){ const m=fallMesh(b); m.position.set(x+.5,y+.5,z+.5); fallers.push({b,x,z,y,vy:0,m,ghost}); }
 function dropFalling(x,y,z){
-  for(let yy=y;yy<H;yy++){ const b=getB(x,yy,z); if(!GRAV.has(b)) break; let ty=yy;
-    while(ty>0){ const u=getB(x,ty-1,z); if(u===0||u===35||(NS[u]&&!SUPPORT.has(u))) ty--; else break; }
-    if(ty!==yy){ setBlock(x,yy,z,0); setBlock(x,ty,z,b); } } }
+  if(!canFallInto(getB(x,y-1,z))||!chunkAt(x,z)) return;
+  for(let yy=y;yy<H;yy++){ const b=getB(x,yy,z); if(!GRAV.has(b)) break; setBlock(x,yy,z,0); spawnFaller(b,x,yy,z,false); roomPub({t:'fall',x,y:yy,z,b}); } }
+function updateFallers(dt){
+  for(let i=fallers.length-1;i>=0;i--){ const f=fallers[i]; f.vy=Math.max(f.vy-28*dt,-30); const ny=f.y+f.vy*dt,cell=Math.floor(ny);
+    const below=getB(f.x,cell,f.z),landed=ny<1||!chunkAt(f.x,f.z)||!canFallInto(below)||(f.ghost&&getB(f.x,cell+1,f.z)===f.b&&ny<=cell+1.01);
+    if(landed){ const ly=Math.max(1,cell+1);
+      if(!f.ghost){ const here=getB(f.x,ly,f.z); if(canFallInto(here)){ setBlock(f.x,ly,f.z,f.b); playTone(120,.06,'triangle',.04); } else spawnDrop(f.b,1,f.x+.5,ly+.5,f.z+.5,0,2,0); }
+      scene.remove(f.m); fallers.splice(i,1); continue; }
+    f.y=ny; f.m.position.y=ny+.5; } }
 function afterBreak(x,y,z,b){
   if(isDoor(b)) for(const dy of [1,-1]) if(isDoor(getB(x,y+dy,z))){ setBlock(x,y+dy,z,0); break; }
   if(b===70){ const k=idx(x,y,z),items=chestData.get(k); if(items){ for(const it of items) if(it) spawnDrop(it.id,it.n,x+.5,y+.6,z+.5,(R()-.5)*3,3,(R()-.5)*3); chestData.delete(k); roomPub({t:'chest',i:k,s:null}); editVer++; } }
@@ -2214,7 +2232,7 @@ function update(dt){
   aimAnimal=null;
   for(const a of animals){ const d=ANIMAL[a.type],sc=a.baby?.55:1,t=rayBox(o,dv,[a.pos.x-d.hw*sc,a.pos.y,a.pos.z-d.hw*sc],[a.pos.x+d.hw*sc,a.pos.y+d.h*sc,a.pos.z+d.hw*sc]);
     if(t!==null&&t<ztd){ ztd=t; aimAnimal=a; zt=null; pt=null; } }
-  if(target&&!zt&&!pt&&!aimAnimal){ outline.visible=true; outline.position.set(target.x+.5,target.y+.5,target.z+.5); } else outline.visible=false;
+  if(target&&!zt&&!pt&&!aimAnimal){ outline.visible=true; const mn=target.mn||[0,0,0],mx=target.mx||[1,1,1]; outline.position.set(target.x+(mn[0]+mx[0])/2,target.y+(mn[1]+mx[1])/2,target.z+(mn[2]+mx[2])/2); outline.scale.set(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2]); } else outline.visible=false;
   // mine / attack
   const breakHeld=(mouseL||keys.KeyF||tState.mine)&&!P.dead;
   atkCD-=dt; breakDelay-=dt; let mining=false;
@@ -2254,7 +2272,7 @@ function update(dt){
   entSyncTick(dt); structTick(dt);
   if(sunH<-.05&&authority()&&!modOn('peaceful')){ spawnT-=dt; const pl=playersList(); if(spawnT<=0&&pl.length&&zombies.length<7+3*(pl.length-1)){ spawnT=4/pl.length;
     const c=pl[(R()*pl.length)|0],a=R()*Math.PI*2,dd=16+R()*20,sx=Math.floor(c.x+Math.cos(a)*dd),sz=Math.floor(c.z+Math.sin(a)*dd); ensureChunk(sx,sz); spawnZombie(sx,sz); } }
-  updateZombies(dt); updateArrows(dt); updateDrops(dt); updateTNT(dt); updateAnimals(dt); updateFarm(dt); updateRedstone(dt);
+  updateZombies(dt); updateArrows(dt); updateDrops(dt); updateFallers(dt); updateTNT(dt); updateAnimals(dt); updateFarm(dt); updateRedstone(dt);
   saveT+=dt; if(saveT>15){ saveT=0; save(); }
 }
 const tnts=new Map(),booms=[];
