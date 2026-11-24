@@ -131,9 +131,11 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
 #online{position:fixed;top:10px;left:10px;font:9px 'Press Start 2P',monospace;background:rgba(0,0,0,.45);padding:8px 10px;pointer-events:none;text-shadow:1px 1px 0 #000}
 #chat{position:fixed;left:10px;top:44px;width:min(420px,calc(100vw - 20px));pointer-events:none}
 #chatlog div{font-size:14px;background:rgba(0,0,0,.42);padding:3px 8px;margin-bottom:2px;text-shadow:1px 1px 0 #000;transition:opacity 1s;overflow-wrap:anywhere}
-#chatlog div.old{opacity:0}#chatlog b{color:var(--gold);font-weight:600}#chatlog .sys{color:#ffe28a}
+#chatlog div.old{opacity:0}#chat:not(.typing) #chatlog div.gone{display:none}#chatlog b{color:var(--gold);font-weight:600}#chatlog .sys{color:#ffe28a}
 #chatIn{pointer-events:auto;margin-top:4px}
 #chat.typing #chatlog div{opacity:1}
+#chatlog{max-height:min(40vh,320px);overflow:hidden;overscroll-behavior:contain}
+#chat.typing{pointer-events:auto}#chat.typing #chatlog{overflow-y:auto;touch-action:pan-y;background:rgba(0,0,0,.25);scrollbar-width:thin}
 @media(max-width:600px){.sgrid{grid-template-columns:repeat(9,37px)}.slot{width:37px;height:37px}.slot img{width:27px;height:27px}#invGrid{grid-template-columns:repeat(9,37px)}.invbody{grid-template-columns:minmax(0,1fr)}.card{padding:18px}#toast{bottom:96px;font-size:9px}}
 @media(max-height:500px){#joy{bottom:60px;width:120px;height:120px}#knob{left:33px;top:33px}#bJump{bottom:70px}#bMine{bottom:120px}#bPlace{bottom:46px}#bSprint{bottom:156px}#bCrouch{bottom:226px;right:96px}}
 </style>
@@ -1080,7 +1082,7 @@ addEventListener('mouseup',e=>{ if(e.button===0) mouseL=false; if(e.button===2) 
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('mousemove',e=>{ if(state!=='play'||!(locked||lockFailed)) return;
   P.yaw-=e.movementX*.0024; P.pitch=clamp(P.pitch-e.movementY*.0024,-1.55,1.55); });
-addEventListener('wheel',e=>{ if(state==='play') selectSlot((sel+(e.deltaY>0?1:-1)+9)%9); },{passive:true});
+addEventListener('wheel',e=>{ if(chatting){ $('chatlog').scrollTop+=e.deltaY; return; } if(state==='play') selectSlot((sel+(e.deltaY>0?1:-1)+9)%9); },{passive:true});
 
 const joy={active:false,id:null,x:0,y:0,cx:0,cy:0};
 const look={id:null,x:0,y:0};
@@ -1457,11 +1459,14 @@ function hitPeer(p){ if(modOn('nopvp')){ toast('PvP is off on this server',1200)
   roomPub({t:'hit',to:p.id,d:(it&&it.dmg)||1,kx:dx/d,kz:dz/d}); }
 function sendPos(){ roomPub({t:'p',n:mp.name,j:mp.joined,ow:mp.owner?1:0,x:+P.pos.x.toFixed(2),y:+P.pos.y.toFixed(2),z:+P.pos.z.toFixed(2),yw:+P.yaw.toFixed(2),pt:+P.pitch.toFixed(2),cr:P.crouch?1:0,sw:(P.swingT>0||P.once>0)?1:0,d:P.dead?1:0}); }
 function updateOnline(){ $('online').classList.toggle('off',!mp.on); $('online').textContent=`${mp.serverName||''} · ${mp.ip||''} · ${mp.peers.size+1} online`; }
-function chatLine(html){ const log=$('chatlog'),d=document.createElement('div'); d.innerHTML=html; log.appendChild(d);
-  while(log.children.length>9) log.firstChild.remove(); setTimeout(()=>d.classList.add('old'),10000); }
+// Chat keeps the last 100 lines. Old lines fade out of the game view but stay scrollable while chat is open.
+function chatLine(html){ const log=$('chatlog'),atEnd=log.scrollHeight-log.scrollTop-log.clientHeight<40,d=document.createElement('div'); d.innerHTML=html; log.appendChild(d);
+  while(log.children.length>100) log.firstChild.remove();
+  if(atEnd||!chatting) log.scrollTop=log.scrollHeight;
+  setTimeout(()=>{ d.classList.add('old'); setTimeout(()=>{ d.classList.add('gone'); if(!chatting) log.scrollTop=log.scrollHeight; },1000); },10000); }
 function addChat(name,m,admin){ chatLine(`<b${admin?' class="adm"':''}>${admin?'[ADMIN] ':''}${esc(name)}:</b> ${esc(m)}`); }
 function sysChat(m){ chatLine(`<span class="sys">${esc(m)}</span>`); }
-function openChat(pre){ if(state!=='play') return; $('chat').classList.remove('off'); chatting=true; keys={}; const i=$('chatIn'); i.classList.remove('off'); $('chat').classList.add('typing'); i.value=pre||''; i.focus(); }
+function openChat(pre){ if(state!=='play') return; $('chat').classList.remove('off'); chatting=true; keys={}; const i=$('chatIn'); i.classList.remove('off'); $('chat').classList.add('typing'); i.value=pre||''; i.focus(); const lg=$('chatlog'); lg.scrollTop=lg.scrollHeight; }
 function closeChat(){ chatting=false; const i=$('chatIn'); i.blur(); i.classList.add('off'); $('chat').classList.remove('typing'); }
 $('chatIn').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ const m=$('chatIn').value.trim().slice(0,120); if(m.startsWith('/')) runCommand(m); else if(m&&mp.on){ roomPub({t:'chat',n:mp.name,m}); addChat(mp.name,m,isAdminUser); } closeChat(); } else if(e.key==='Escape') closeChat(); });
 
