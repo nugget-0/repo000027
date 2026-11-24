@@ -419,11 +419,15 @@ const B_OCEAN=0,B_BEACH=1,B_PLAINS=2,B_FOREST=3,B_BIRCH=4,B_DESERT=5,B_SNOW=6,B_
 function column(x,z){
   const cont=fbm(x/420+11.3,z/420-7.1),temp=noise2(x/340+71.7,z/340+33.3),hum=noise2(x/300-55.5,z/300+12.9);
   const hills=fbm(x/70,z/70),mnt=Math.max(0,noise2(x/190+5.5,z/190-9.5)-.55);
-  let h,bio;
-  if(cont<.36){ h=Math.floor(12+cont*38+hills*6); bio=B_OCEAN; }
-  else if(cont<.4){ h=SEA+Math.floor((cont-.36)*50); bio=B_BEACH; }
-  else { h=Math.floor(SEA+2+(cont-.4)*30+hills*16+mnt*160);
-    bio=mnt>.1?B_MOUNT:(temp>.6&&hum<.48)?B_DESERT:temp<.38?B_SNOW:hum>.6?B_FOREST:(hum>.5&&temp<.52)?B_BIRCH:B_PLAINS; }
+  // One smooth height curve from deep sea, up the beach and into the hills, so there are no cliffs at the coast.
+  const sm=(a,b,v)=>{ const t=clamp((v-a)/(b-a),0,1); return t*t*(3-2*t); };
+  const base=cont<.36?SEA-2-(.36-cont)*70:cont<.42?SEA-2+(cont-.36)/.06*4.5:SEA+2.5+(cont-.42)*35;
+  const land=sm(.38,.52,cont);
+  const h=Math.floor(base+(hills-.5)*(6+16*land)+mnt*160*land);
+  let bio;
+  if(cont<.36&&h<SEA) bio=B_OCEAN;
+  else if(h<=SEA+1&&cont<.42) bio=B_BEACH;
+  else bio=mnt*land>.1?B_MOUNT:(temp>.6&&hum<.48)?B_DESERT:temp<.38?B_SNOW:hum>.6?B_FOREST:(hum>.5&&temp<.52)?B_BIRCH:B_PLAINS;
   return [clamp(h,4,H-14),bio]; }
 function genChunk(cx,cz){
   const c={cx,cz,x0:cx*CS,z0:cz*CS,d:new Uint8Array(CH),mesh:null,meshed:false},d=c.d;
