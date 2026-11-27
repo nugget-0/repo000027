@@ -1855,13 +1855,14 @@ function sbStart(){ if(SB.started) return; SB.started=true; sbFetch(); setInterv
 function dropSub(){ try{ SB.sub&&SB.sub.unsubscribe(); }catch(e){} SB.sub=null; }
 async function sbFetch(){ clearTimeout(SB.timer); let next=8000;
   try{ const j=await api('GET');
-    if(!SB.sub||SB.status!=='live'){ SB.rows=Array.isArray(j.servers)?j.servers:[]; }
+    if(Array.isArray(j.servers)) SB.rows=j.servers;   // the database list is always the truth
     const m=j.url&&j.sealed?await loadRT():null;
     if(m){ if(!SB.client) SB.client=m.createRealtimeClient({url:j.url});
       if(!SB.sub){ SB.sub=SB.client.subscribe(j.sealed,{initialData:SB.rows});
-        SB.sub.onChange(s=>{ if(s.data) SB.rows=[...s.data]; SB.status=s.status; if(s.status==='error'){ dropSub(); clearTimeout(SB.timer); SB.timer=setTimeout(sbFetch,3000); } renderServers(); }); }
+        // Live updates only tell us something changed; we then reload the real list, so a glitchy or empty update can never hide servers.
+        SB.sub.onChange(s=>{ SB.status=s.status; clearTimeout(SB.rt); SB.rt=setTimeout(()=>api('GET').then(j=>{ if(Array.isArray(j.servers)){ SB.rows=j.servers; renderServers(); } }).catch(()=>{}),300); if(s.status==='error'){ dropSub(); clearTimeout(SB.timer); SB.timer=setTimeout(sbFetch,3000); } renderServers(); }); }
       else await SB.sub.renew(j.sealed).catch(()=>{ dropSub(); });
-      next=Math.max(5000,(j.sealed.expiresAt||0)-Date.now()-15000); if(SB.status==='loading') SB.status='connecting'; }
+      next=Math.min(20000,Math.max(5000,(j.sealed.expiresAt||0)-Date.now()-15000)); if(SB.status==='loading') SB.status='connecting'; }
     else SB.status='polling';
   }catch(e){ SB.status='offline'; SB.err=e.message; }
   renderServers(); SB.timer=setTimeout(sbFetch,next); }
