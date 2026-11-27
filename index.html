@@ -98,7 +98,7 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
 .mprow select{font:16px system-ui,sans-serif;padding:10px;min-height:46px;background:#111318;color:#fff;border:3px solid #000;width:100%}
 .chk{display:flex;gap:8px;align-items:center;margin:4px 0 10px;font-size:14px;color:#d9dde6}.chk input{width:20px;height:20px}
 .wrow,.srow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;background:#3a3d46;border:2px solid #000;padding:8px 8px 8px 12px}
-.srow{grid-template-columns:minmax(0,1fr) auto}.srow.adm{grid-template-columns:minmax(0,1fr) auto auto auto}.srow.off{opacity:.72}.srow .on{color:#7fe07f;font-weight:600}
+.srow{grid-template-columns:minmax(0,1fr) auto}.srow.op{grid-template-columns:minmax(0,1fr) auto auto auto}.srow.off{opacity:.72}.srow .on{color:#7fe07f;font-weight:600}
 .srow.pin{border-color:var(--gold);box-shadow:inset 3px 0 0 var(--gold)}
 .tag{display:inline-block;font:8px 'Press Start 2P',monospace;background:var(--gold);color:#1a1a1a;padding:3px 5px;margin-right:6px;vertical-align:2px}
 .narow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 6px}.narow .hint{margin:0}
@@ -109,7 +109,7 @@ h3{margin:0 0 10px;font-size:12px;color:var(--gold)}
 .mylist{display:grid;gap:6px;margin:8px 0 6px}
 .adminbox{text-align:left;border:3px solid var(--gold);background:#2a2618;padding:12px;margin:0 0 16px}.adminbox h3{margin:0 0 8px}
 .abtns{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}.aplayer{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}.aplayer b{min-width:90px}
-#chatlog .adm{color:#ffcf3f}
+#chatlog .staff{color:#ffcf3f}
 .maker{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-bottom:6px}.maker .wide{grid-column:1/-1}
 .fl{display:grid;gap:4px;font-size:12px;color:#c3c7d0}
 .fl input,.fl select{font:16px system-ui,sans-serif;padding:10px;min-height:46px;background:#111318;color:#fff;border:3px solid #000;width:100%}
@@ -1777,7 +1777,7 @@ function chatLine(html){ const log=$('chatlog'),atEnd=log.scrollHeight-log.scrol
   while(log.children.length>100) log.firstChild.remove();
   if(atEnd||!chatting) log.scrollTop=log.scrollHeight;
   setTimeout(()=>{ d.classList.add('old'); setTimeout(()=>{ d.classList.add('gone'); if(!chatting) log.scrollTop=log.scrollHeight; },1000); },10000); }
-function addChat(name,m,admin){ chatLine(`<b${admin?' class="adm"':''}>${admin?'[ADMIN] ':''}${esc(name)}:</b> ${esc(m)}`); }
+function addChat(name,m,admin){ chatLine(`<b${admin?' class="staff"':''}>${admin?'[ADMIN] ':''}${esc(name)}:</b> ${esc(m)}`); }
 function sysChat(m){ chatLine(`<span class="sys">${esc(m)}</span>`); }
 function openChat(pre){ if(state!=='play') return; $('chat').classList.remove('off'); chatting=true; keys={}; const i=$('chatIn'); i.classList.remove('off'); $('chat').classList.add('typing'); i.value=pre||''; i.focus(); const lg=$('chatlog'); lg.scrollTop=lg.scrollHeight; }
 function closeChat(){ chatting=false; const i=$('chatIn'); i.blur(); i.classList.add('off'); $('chat').classList.remove('typing'); }
@@ -1867,11 +1867,11 @@ async function sbFetch(){ clearTimeout(SB.timer); let next=8000;
   }catch(e){ SB.status='offline'; SB.err=e.message; }
   renderServers(); SB.timer=setTimeout(sbFetch,next); }
 function renderServers(){ const now=Date.now();
-  const rows=SB.rows.filter(r=>r&&IP_RE.test(r.ip)); for(const r of rows) r.online=!!r.last_seen&&now-new Date(r.last_seen).getTime()<150000;
+  const rows=SB.rows.filter(r=>r&&IP_RE.test(r.ip)).map(r=>({...r})); for(const r of rows) r.online=!!r.last_seen&&now-new Date(r.last_seen).getTime()<150000;
   const nOn=rows.filter(r=>r.online).length;
   $('sbStatus').textContent=SB.status==='offline'?`Couldn't reach the server list (${SB.err||'offline'}). You can still connect by IP when it's back.`
     :rows.length||SB.status==='live'?`${nOn} online, ${rows.length-nOn} offline${SB.status==='live'?' · updates live':''}`:'Loading the server list...';
-  $('servers').innerHTML=rows.length?rows.map(r=>`<div class="srow${r.pinned?' pin':''}${isAdminUser?' adm':''}${r.online?'':' off'}"><span><b>${r.pinned?'<span class="tag">PINNED</span>':''}${esc(r.name)}</b><small>${r.motd?esc(r.motd)+' · ':''}hosted by ${esc(r.host_name)} · ${r.online?`<b class="on">Online</b> ${r.players|0}/${r.max_players|0} players${(r.players|0)>=(r.max_players|0)?' · full':''}`:`Offline · last played ${timeAgo(new Date(r.last_seen).getTime())}`}</small>${r.mods?`<small class="modtags">${[...parseMods(r.mods)].map(m=>`<i>${MOD_NAME[m]}</i>`).join('')}</small>`:''}<small class="ip">${esc(r.ip)}</small></span>${isAdminUser?`<button class="mini del" data-rm="${esc(r.ip)}">Remove</button>`:''}${isAdminUser?`<button class="mini" data-pin="${esc(r.ip)}" data-on="${r.pinned?1:0}">${r.pinned?'Unpin':'Pin'}</button>`:''}<button class="mini go" data-ip="${esc(r.ip)}">${r.online?'Join':'Play'}</button></div>`).join('')
+  $('servers').innerHTML=rows.length?rows.map(r=>`<div class="srow${r.pinned?' pin':''}${isAdminUser?' op':''}${r.online?'':' off'}"><span><b>${r.pinned?'<span class="tag">PINNED</span>':''}${esc(r.name)}</b><small>${r.motd?esc(r.motd)+' · ':''}hosted by ${esc(r.host_name)} · ${r.online?`<b class="on">Online</b> ${r.players|0}/${r.max_players|0} players${(r.players|0)>=(r.max_players|0)?' · full':''}`:`Offline · last played ${timeAgo(new Date(r.last_seen).getTime())}`}</small>${r.mods?`<small class="modtags">${[...parseMods(r.mods)].map(m=>`<i>${MOD_NAME[m]}</i>`).join('')}</small>`:''}<small class="ip">${esc(r.ip)}</small></span>${isAdminUser?`<button class="mini del" data-rm="${esc(r.ip)}">Remove</button>`:''}${isAdminUser?`<button class="mini" data-pin="${esc(r.ip)}" data-on="${r.pinned?1:0}">${r.pinned?'Unpin':'Pin'}</button>`:''}<button class="mini go" data-ip="${esc(r.ip)}">${r.online?'Join':'Play'}</button></div>`).join('')
     :(SB.status==='offline'?'':'<p class="hint">No public servers right now. Host one below and it shows up here for everyone.</p>'); }
 { let n=''; try{ n=localStorage.getItem('nuggetcraft-name')||''; }catch(e){} $('mpName').value=n||('Player'+((R()*900+100)|0)); }
 // ----- Sign in with Nugget: admins (checked on the server) can pin servers -----
